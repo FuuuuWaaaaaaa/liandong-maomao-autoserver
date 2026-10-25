@@ -1,0 +1,16 @@
+# Node / React
+server-manager/node_modules/
+server-manager/dist/
+server-manager/web/dist/
+server-manager/.env
+server-manager/npm-debug.log*
+
+# Java / Gradle
+jump-plugin/.gradle/
+jump-plugin/build/
+
+# Local IDE and OS files
+.idea/
+.vscode/
+*.iml
+.DS_Store

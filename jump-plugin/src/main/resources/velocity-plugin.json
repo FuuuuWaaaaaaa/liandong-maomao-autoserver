@@ -1,0 +1,8 @@
+{
+  "id": "shuanglong-jump",
+  "name": "双龙跳转",
+  "version": "0.1.0",
+  "description": "按域名路由、排队唤醒与代理心跳插件",
+  "authors": ["Shuanglong"],
+  "main": "cn.shuanglong.jump.JumpPlugin"
+}

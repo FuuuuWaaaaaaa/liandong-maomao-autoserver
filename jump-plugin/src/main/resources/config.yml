@@ -1,0 +1,13 @@
+manager:
+  base-url: "https://manager.example.net"
+  proxy-id: "proxy-main"
+  token: "${JUMP_MANAGER_TOKEN}"
+  request-timeout-ms: 5000
+  config-refresh-seconds: 30
+  heartbeat-seconds: 15
+queue:
+  transfer-notice-seconds: 5
+  transfer-stability-seconds: 2
+  offline-ticket-ttl-seconds: 1800
+messages:
+  locale: "zh_CN"

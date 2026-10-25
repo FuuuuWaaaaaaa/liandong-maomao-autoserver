@@ -1,0 +1,17 @@
+services:
+  manager:
+    build: .
+    restart: unless-stopped
+    env_file: .env
+    ports:
+      - "8080:8080"
+    depends_on:
+      mysql-migration:
+        condition: service_completed_successfully
+  mysql-migration:
+    build: .
+    restart: "no"
+    env_file: .env
+    command: ["node", "dist/migrate.js"]
+
+# MySQL intentionally stays external. Set DATABASE_URL to your independent SQL service.
