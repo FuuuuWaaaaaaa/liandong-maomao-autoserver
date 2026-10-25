@@ -1,0 +1,20 @@
+import { describe, expect, it } from 'vitest';
+import { MemoryStore } from './store.js';
+
+describe('代理凭证管理', () => {
+  it('创建代理后可以用生成的令牌认证，列表不会返回完整令牌', async () => {
+    const store = new MemoryStore(new Map());
+    const created = await store.createProxy({ id: 'proxy-test', name: '测试代理', token: 'first-token' });
+    expect(created?.id).toBe('proxy-test');
+    expect(created).not.toHaveProperty('token');
+    expect(await store.authenticateProxy('first-token')).toBe('proxy-test');
+    expect((await store.listProxies())[0]).not.toHaveProperty('token');
+  });
+
+  it('轮换令牌后旧令牌失效', async () => {
+    const store = new MemoryStore(new Map([['proxy-test', 'first-token']]));
+    await store.rotateProxyToken('proxy-test', 'second-token');
+    expect(await store.authenticateProxy('first-token')).toBeUndefined();
+    expect(await store.authenticateProxy('second-token')).toBe('proxy-test');
+  });
+});

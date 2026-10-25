@@ -1,4 +1,5 @@
 import Fastify, { type FastifyReply, type FastifyRequest } from 'fastify';
+import { randomBytes, randomUUID } from 'node:crypto';
 import cors from '@fastify/cors';
 import fastifyStatic from '@fastify/static';
 import { existsSync } from 'node:fs';
@@ -55,6 +56,25 @@ app.post('/api/v1/proxy/targets/:targetId/tickets/:ticketId/events', async (requ
 app.get('/api/v1/proxy/targets/:targetId/queue', async (request, reply) => { const proxyId = await requireProxy(request, reply); if (!proxyId) return; const targetId = (request.params as { targetId: string }).targetId; if (!await store.getTarget(targetId)) return reply.code(404).send({ code: 'TARGET_NOT_FOUND', message: '目标服务器不存在' }); const playerUuid = (request.query as { playerUuid?: string }).playerUuid; return summarizeTickets(await store.listTickets(targetId), playerUuid); });
 
 app.get('/api/v1/admin/dashboard', async (request, reply) => { if (!requireAdmin(request, reply)) return; const targets = await store.listTargets(); const counts = Object.fromEntries(['READY', 'STARTING', 'STOPPING', 'OFFLINE', 'FAILED', 'UNKNOWN'].map((state) => [state, targets.filter((target) => target.lifecycle === state).length])); return { counts, targets: targets.map((target) => ({ ...target, queue: summarizeTickets([]) })) }; });
+
+const proxyCreateSchema = z.object({ name: z.string().trim().min(1).max(128) });
+const MAX_PROXY_ID_SUFFIX_LENGTH = 48;
+function generatedProxyId(name: string): string { const readable = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, MAX_PROXY_ID_SUFFIX_LENGTH); return `proxy-${readable || randomUUID().slice(0, 8)}`; }
+function newProxyToken(): string { return randomBytes(32).toString('hex'); }
+
+app.get('/api/v1/admin/proxies', async (request, reply) => { if (!requireAdmin(request, reply)) return; return { proxies: await store.listProxies() }; });
+app.post('/api/v1/admin/proxies', async (request, reply) => {
+  if (!requireAdmin(request, reply)) return;
+  const parsed = proxyCreateSchema.safeParse(request.body);
+  if (!parsed.success) return reply.code(400).send({ code: 'INVALID_BODY', message: '代理名称不能为空且不能超过 128 个字符' });
+  const token = newProxyToken();
+  let id = generatedProxyId(parsed.data.name);
+  let proxy = await store.createProxy({ id, name: parsed.data.name, token });
+  if (!proxy) { id = `proxy-${randomUUID().slice(0, 12)}`; proxy = await store.createProxy({ id, name: parsed.data.name, token }); }
+  if (!proxy) return reply.code(409).send({ code: 'PROXY_EXISTS', message: '代理 ID 已存在，请重试' });
+  return reply.code(201).send({ proxy, token });
+});
+app.post('/api/v1/admin/proxies/:proxyId/rotate', async (request, reply) => { if (!requireAdmin(request, reply)) return; const proxyId = (request.params as { proxyId: string }).proxyId; const token = newProxyToken(); const proxy = await store.rotateProxyToken(proxyId, token); if (!proxy) return reply.code(404).send({ code: 'PROXY_NOT_FOUND', message: '代理不存在' }); return { proxy, token }; });
 
 app.setNotFoundHandler((request, reply) => { if (request.method === 'GET' && existsSync(join(webRoot, 'index.html'))) return reply.sendFile('index.html'); return reply.code(404).send({ code: 'NOT_FOUND', message: '接口不存在' }); });
 const close = async () => { await app.close(); await store.close(); };

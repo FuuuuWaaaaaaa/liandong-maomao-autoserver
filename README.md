@@ -55,6 +55,17 @@ SQL_TYPE=memory PROXY_TOKENS='proxy-main=dev-proxy-token' ADMIN_API_TOKEN=dev-ad
 | `PROXY_TOKENS` 中的值 | Velocity 插件 | 管理器环境变量；插件 `config.yml` 通过 `${JUMP_MANAGER_TOKEN}` 引用 | 代理读取配置、发送心跳和请求唤醒。 |
 | `PTERODACTYL_API_TOKEN` | 管理器服务 | 管理器环境变量或 Docker Secret | 调用 Pterodactyl Client API；绝不能写入插件。 |
 
+### 在 WebUI 添加代理
+
+使用 MySQL 持久化时，不需要手工编辑 `PROXY_TOKENS` 来添加新代理。完成数据库迁移并登录 WebUI 后，打开 **设置 → 代理接入**：
+
+1. 输入代理名称并点击“生成代理凭证”。
+2. 立即复制页面显示的 `config.yml` 片段，粘贴到对应 Velocity 插件的配置文件。
+3. 重启 Velocity。代理首次心跳成功后，可以在同一页面查看最近心跳和令牌尾码。
+4. 如果令牌泄露，点击对应代理的“重新生成令牌”，然后替换插件配置并重启；旧令牌会立即失效。
+
+完整令牌只在创建或重新生成后返回一次，代理列表不会显示完整令牌。`PROXY_TOKENS` 仍可作为环境变量启动时的兼容/引导凭证；WebUI 创建的代理凭证会以哈希形式保存到 MySQL 的 `proxy_instances` 表中。
+
 ## GitHub Docker 镜像
 
 每次推送 `main` 或发布 `v*` 标签时，GitHub Actions 会自动构建并发布管理器镜像到 GitHub Container Registry：
@@ -132,7 +143,7 @@ sudo docker run --rm --env-file /绝对路径/manager.env \
 | `HOST` | 否 | 监听地址，默认 `0.0.0.0`。 |
 | `PORT` | 否 | HTTP 端口，默认 `8080`。 |
 | `ADMIN_API_TOKEN` | 建议 | 管理控制台 API 令牌。 |
-| `PROXY_TOKENS` | 代理接入时必填 | 代理令牌映射，格式 `proxy-main=随机令牌,proxy-2=随机令牌`。 |
+| `PROXY_TOKENS` | 可选 | 内存模式或首次引导时的代理令牌映射，格式 `proxy-main=随机令牌,proxy-2=随机令牌`。MySQL 模式可在 WebUI 的“设置 → 代理接入”中创建并持久化代理。 |
 | `PTERODACTYL_URL` | 使用面板时必填 | Pterodactyl 面板地址。 |
 | `PTERODACTYL_API_TOKEN` | 使用面板时必填 | Pterodactyl Client API Token，只放在管理器环境变量或 Docker Secret。 |
 | `PTERODACTYL_TIMEOUT_MS` | 否 | 面板请求超时，默认 `5000`。 |

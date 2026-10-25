@@ -24,6 +24,8 @@ messages:
 
 `manager.token` 支持 `${环境变量名}` 占位符。推荐使用 `${JUMP_MANAGER_TOKEN}`，然后在 Velocity 进程环境中设置令牌；也可以直接填写令牌，但不应将包含真实令牌的配置文件提交到 Git。`manager.proxy-id` 必须与管理器 `PROXY_TOKENS` 左侧的代理 ID 一致。`base-url`、`proxy-id` 和时间参数均从该文件读取，修改后重启代理生效。
 
+使用 MySQL 管理器时，也可以在 WebUI 的“设置 → 代理接入”中输入代理名称并生成凭证。复制页面显示的一次性 `config.yml` 片段即可，不需要手工生成 `proxy-id` 或随机令牌；重新生成令牌后必须替换配置并重启 Velocity。
+
 ## 构建
 
 需要 Java 21 与 Gradle：

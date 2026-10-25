@@ -4,6 +4,8 @@ import './styles.css';
 
 type Target = { id: string; displayName: string; aliases: string[]; lifecycle: string; rawState: string; ready: boolean; playerCount: number; heartbeatAt?: string; lastError?: string; entryProfile?: string };
 type Dashboard = { counts: Record<string, number>; targets: Target[] };
+type ProxySummary = { id: string; name: string; tokenHint?: string; enabled: boolean; lastSeenAt?: string; pluginVersion?: string; apiVersion?: string };
+type ProxyCredential = { proxy: ProxySummary; token: string };
 const labels: Record<string, string> = { READY: '就绪', STARTING: '启动中', STOPPING: '停止中', OFFLINE: '离线', FAILED: '失败', UNKNOWN: '未知', RUNNING_UNREADY: '运行中·等待游戏', IDLE_COUNTDOWN: '空闲倒计时' };
 const nav = ['总览', '服务器', '路由与档案', '活动记录', '设置'];
 const MAX_BACKGROUND_BYTES = 3 * 1024 * 1024;
@@ -11,6 +13,12 @@ const MAX_BACKGROUND_BYTES = 3 * 1024 * 1024;
 function statusClass(state: string) { return `status status-${state.toLowerCase().replaceAll('_', '-')}`; }
 function formatAge(value?: string) { if (!value) return '没有心跳'; const seconds = Math.max(0, Math.round((Date.now() - Date.parse(value)) / 1000)); return `${seconds} 秒前`; }
 function StatusBadge({ state }: { state: string }) { return <span className={statusClass(state)}><i />{labels[state] ?? state}</span>; }
+async function adminRequest<T>(token: string, path: string, init: RequestInit = {}): Promise<T> {
+  const response = await fetch(path, { ...init, headers: { Authorization: `Bearer ${token}`, ...(init.body ? { 'Content-Type': 'application/json' } : {}) } });
+  const body = await response.json().catch(() => ({})) as { message?: string };
+  if (!response.ok) throw new Error(body.message ?? `管理员接口请求失败（HTTP ${response.status}）`);
+  return body as T;
+}
 
 function AdminTokenForm({ initialToken, onSave }: { initialToken: string; onSave: (token: string) => void }) {
   const [value, setValue] = useState(initialToken);
@@ -48,8 +56,16 @@ function ActivityView({ targets }: { targets: Target[] }) {
   return <section className="view-stack"><div className="page-toolbar glass-surface"><div><p className="eyebrow">审计视图</p><h2>活动记录</h2><p>这里显示当前目标的生命周期快照；详细审计记录由管理器持久化。</p></div></div><article className="panel glass-surface full-panel"><div className="panel-heading"><div><p className="eyebrow">最近状态</p><h2>生命周期时间线</h2></div></div><div className="activity-list">{targets.map((target) => <div className="activity-item" key={target.id}><span className="activity-line" /><div><strong>{target.displayName} · {labels[target.lifecycle] ?? target.lifecycle}</strong><p>原始状态：{target.rawState}，玩家：{target.playerCount} 人，最近心跳：{formatAge(target.heartbeatAt)}</p></div><StatusBadge state={target.lifecycle} /></div>)}{targets.length === 0 && <div className="empty">暂无活动记录。</div>}</div></article></section>;
 }
 
-function SettingsPanel({ background, backgroundError, inputRef, onUpload, onClear, adminToken, onSaveToken, onClearToken }: { background: string; backgroundError: string; inputRef: React.RefObject<HTMLInputElement | null>; onUpload: (event: React.ChangeEvent<HTMLInputElement>) => void; onClear: () => void; adminToken: string; onSaveToken: (token: string) => void; onClearToken: () => void }) {
-  return <section className="settings-grid"><article className="settings-card glass-surface"><div className="panel-heading"><div><p className="eyebrow">外观</p><h2>自定义网页背景</h2></div><span className="settings-symbol">▧</span></div><div className="settings-body"><div className="background-preview" style={background ? { backgroundImage: `url(${background})` } : undefined}><span>{background ? '当前背景' : '默认玻璃背景'}</span></div><div className="settings-copy"><strong>上传一张你喜欢的图片</strong><p>图片只保存在当前浏览器，不会上传到服务器。建议使用 3 MB 以内的 JPG、PNG 或 WebP 图片。</p><input ref={inputRef} className="visually-hidden" type="file" accept="image/png,image/jpeg,image/webp,image/gif" onChange={onUpload} /><div className="settings-actions"><button className="primary-button" onClick={() => inputRef.current?.click()}><span>▧</span> 上传图片</button>{background && <button className="quiet-button" onClick={onClear}>清除背景</button>}</div>{backgroundError && <p className="settings-error" role="alert">{backgroundError}</p>}</div></div></article><article className="settings-card glass-surface"><div className="panel-heading"><div><p className="eyebrow">主题</p><h2>显示偏好</h2></div><span className="settings-symbol">☼</span></div><div className="settings-body compact"><p>使用顶部的月亮或太阳按钮切换浅色与深色玻璃主题。主题和背景偏好都会保存在当前浏览器。</p></div></article><article className="settings-card glass-surface"><div className="panel-heading"><div><p className="eyebrow">访问控制</p><h2>管理员令牌</h2></div><span className="settings-symbol">⌁</span></div><div className="settings-body token-settings"><AdminTokenForm initialToken={adminToken} onSave={onSaveToken} /><button className="quiet-button token-clear" onClick={onClearToken}>清除浏览器令牌</button></div></article></section>;
+function ProxyPanel({ proxies, credential, error, onCreate, onRotate }: { proxies: ProxySummary[]; credential: ProxyCredential | null; error: string; onCreate: (name: string) => void; onRotate: (id: string) => void }) {
+  const [name, setName] = useState('');
+  const [copyMessage, setCopyMessage] = useState('');
+  const snippet = credential ? `manager:\n  base-url: "${window.location.origin}"\n  proxy-id: "${credential.proxy.id}"\n  token: "${credential.token}"` : '';
+  const copySnippet = () => { if (!snippet || !navigator.clipboard) return; void navigator.clipboard.writeText(snippet).then(() => setCopyMessage('配置片段已复制')).catch(() => setCopyMessage('复制失败，请手动复制')); };
+  return <article className="settings-card glass-surface proxy-card"><div className="panel-heading"><div><p className="eyebrow">代理接入</p><h2>添加 Velocity 代理</h2></div><span className="settings-symbol">⌁</span></div><div className="settings-body proxy-body"><form className="proxy-create-form" onSubmit={(event) => { event.preventDefault(); const value = name.trim(); if (!value) return; onCreate(value); setName(''); }}><label htmlFor="proxy-name">代理名称</label><div className="token-controls"><input id="proxy-name" className="token-input" value={name} onChange={(event) => setName(event.target.value)} placeholder="例如：主大厅代理" /><button className="primary-button" type="submit">生成代理凭证</button></div><small>系统会自动生成代理 ID 和随机令牌。令牌只在生成或重新生成后显示一次。</small></form>{error && <p className="settings-error" role="alert">{error}</p>}{credential && <div className="proxy-credential"><strong>请立即复制插件配置</strong><p>令牌不会再次通过列表接口返回。修改配置后重启 Velocity。</p><pre>{snippet}</pre><div className="settings-actions"><button className="primary-button" type="button" onClick={copySnippet}>复制 config.yml 片段</button>{copyMessage && <small className="copy-message">{copyMessage}</small>}</div></div>}<div className="proxy-list">{proxies.length === 0 ? <div className="empty">尚未添加代理。</div> : proxies.map((proxy) => <div className="proxy-row" key={proxy.id}><div><strong>{proxy.name}</strong><small>{proxy.id} · {proxy.tokenHint ?? '未显示令牌'} · {proxy.lastSeenAt ? `最近心跳 ${formatAge(proxy.lastSeenAt)}` : '尚未连接'}</small></div><button className="quiet-button" type="button" onClick={() => onRotate(proxy.id)}>重新生成令牌</button></div>)}</div></div></article>;
+}
+
+function SettingsPanel({ background, backgroundError, inputRef, onUpload, onClear, adminToken, onSaveToken, onClearToken, proxies, proxyCredential, proxyError, onCreateProxy, onRotateProxy }: { background: string; backgroundError: string; inputRef: React.RefObject<HTMLInputElement | null>; onUpload: (event: React.ChangeEvent<HTMLInputElement>) => void; onClear: () => void; adminToken: string; onSaveToken: (token: string) => void; onClearToken: () => void; proxies: ProxySummary[]; proxyCredential: ProxyCredential | null; proxyError: string; onCreateProxy: (name: string) => void; onRotateProxy: (id: string) => void }) {
+  return <section className="settings-grid"><article className="settings-card glass-surface"><div className="panel-heading"><div><p className="eyebrow">外观</p><h2>自定义网页背景</h2></div><span className="settings-symbol">▧</span></div><div className="settings-body"><div className="background-preview" style={background ? { backgroundImage: `url(${background})` } : undefined}><span>{background ? '当前背景' : '默认玻璃背景'}</span></div><div className="settings-copy"><strong>上传一张你喜欢的图片</strong><p>图片只保存在当前浏览器，不会上传到服务器。建议使用 3 MB 以内的 JPG、PNG 或 WebP 图片。</p><input ref={inputRef} className="visually-hidden" type="file" accept="image/png,image/jpeg,image/webp,image/gif" onChange={onUpload} /><div className="settings-actions"><button className="primary-button" onClick={() => inputRef.current?.click()}><span>▧</span> 上传图片</button>{background && <button className="quiet-button" onClick={onClear}>清除背景</button>}</div>{backgroundError && <p className="settings-error" role="alert">{backgroundError}</p>}</div></div></article><article className="settings-card glass-surface"><div className="panel-heading"><div><p className="eyebrow">主题</p><h2>显示偏好</h2></div><span className="settings-symbol">☼</span></div><div className="settings-body compact"><p>使用顶部的月亮或太阳按钮切换浅色与深色玻璃主题。主题和背景偏好都会保存在当前浏览器。</p></div></article><article className="settings-card glass-surface"><div className="panel-heading"><div><p className="eyebrow">访问控制</p><h2>管理员令牌</h2></div><span className="settings-symbol">⌁</span></div><div className="settings-body token-settings"><AdminTokenForm initialToken={adminToken} onSave={onSaveToken} /><button className="quiet-button token-clear" onClick={onClearToken}>清除浏览器令牌</button></div></article><ProxyPanel proxies={proxies} credential={proxyCredential} error={proxyError} onCreate={onCreateProxy} onRotate={onRotateProxy} /></section>;
 }
 
 function App() {
@@ -58,48 +74,42 @@ function App() {
   const [data, setData] = useState<Dashboard | null>(null);
   const [error, setError] = useState('');
   const [adminToken, setAdminToken] = useState(localStorage.getItem('admin-token') ?? '');
+  const [proxies, setProxies] = useState<ProxySummary[]>([]);
+  const [proxyCredential, setProxyCredential] = useState<ProxyCredential | null>(null);
+  const [proxyError, setProxyError] = useState('');
   const [background, setBackground] = useState(localStorage.getItem('custom-background') ?? '');
   const [backgroundError, setBackgroundError] = useState('');
   const backgroundInputRef = useRef<HTMLInputElement>(null);
   useEffect(() => { document.documentElement.dataset.theme = dark ? 'dark' : 'light'; localStorage.setItem('theme', dark ? 'dark' : 'light'); }, [dark]);
   useEffect(() => { if (background) localStorage.setItem('custom-background', background); else localStorage.removeItem('custom-background'); }, [background]);
+  const loadProxies = (token: string) => {
+    if (!token) { setProxies([]); return; }
+    adminRequest<{ proxies: ProxySummary[] }>(token, '/api/v1/admin/proxies').then((result) => { setProxies(result.proxies); setProxyError(''); }).catch((reason) => setProxyError(reason instanceof Error ? reason.message : '代理列表加载失败'));
+  };
   const loadDashboard = (token: string) => {
     if (!token) { setData(null); setError('尚未设置管理员令牌'); return; }
     setError('');
-    fetch('/api/v1/admin/dashboard', { headers: { Authorization: `Bearer ${token}` } }).then(async (response) => {
-      const body = await response.json().catch(() => ({})) as { message?: string };
-      if (!response.ok) {
-        if (response.status === 503) throw new Error(body.message ?? '管理器未配置 ADMIN_API_TOKEN，请设置后重启服务');
-        if (response.status === 401) throw new Error(body.message ?? '管理员令牌无效，请确认 ADMIN_API_TOKEN 并重启管理器');
-        throw new Error(body.message ?? `管理员接口请求失败（HTTP ${response.status}）`);
-      }
-      return body as Dashboard;
-    }).then(setData).catch((reason) => setError(reason instanceof Error ? reason.message : '管理员接口请求失败，请检查管理器地址和网络连接'));
+    adminRequest<Dashboard>(token, '/api/v1/admin/dashboard').then((dashboard) => { setData(dashboard); loadProxies(token); }).catch((reason) => setError(reason instanceof Error ? reason.message : '管理员接口请求失败，请检查管理器地址和网络连接'));
   };
   useEffect(() => { loadDashboard(adminToken); }, []);
   const saveAdminToken = (token: string) => {
     const normalized = token.trim();
     if (!normalized) { setError('管理员令牌不能为空'); return; }
     setError('正在验证管理员令牌…');
-    fetch('/api/v1/admin/dashboard', { headers: { Authorization: `Bearer ${normalized}` } }).then(async (response) => {
-      const body = await response.json().catch(() => ({})) as { message?: string };
-      if (!response.ok) {
-        if (response.status === 503) throw new Error(body.message ?? '管理器未配置 ADMIN_API_TOKEN，请设置后重启服务');
-        if (response.status === 401) throw new Error(body.message ?? '管理员令牌无效，请确认 ADMIN_API_TOKEN 并重启管理器');
-        throw new Error(body.message ?? `管理员接口请求失败（HTTP ${response.status}）`);
-      }
-      return body as Dashboard;
-    }).then((dashboard) => {
+    adminRequest<Dashboard>(normalized, '/api/v1/admin/dashboard').then((dashboard) => {
       localStorage.setItem('admin-token', normalized);
       setAdminToken(normalized);
       setData(dashboard);
+      loadProxies(normalized);
       setError('');
     }).catch((reason) => setError(reason instanceof Error ? reason.message : '管理员接口请求失败，请检查管理器地址和网络连接'));
   };
-  const clearAdminToken = () => { localStorage.removeItem('admin-token'); setAdminToken(''); setData(null); setError('已清除浏览器中的管理员令牌'); };
+  const createProxy = (name: string) => { setProxyError(''); adminRequest<ProxyCredential>(adminToken, '/api/v1/admin/proxies', { method: 'POST', body: JSON.stringify({ name }) }).then((result) => { setProxyCredential(result); loadProxies(adminToken); }).catch((reason) => setProxyError(reason instanceof Error ? reason.message : '代理创建失败')); };
+  const rotateProxy = (id: string) => { setProxyError(''); adminRequest<ProxyCredential>(adminToken, `/api/v1/admin/proxies/${encodeURIComponent(id)}/rotate`, { method: 'POST' }).then((result) => { setProxyCredential(result); loadProxies(adminToken); }).catch((reason) => setProxyError(reason instanceof Error ? reason.message : '代理令牌重新生成失败')); };
+  const clearAdminToken = () => { localStorage.removeItem('admin-token'); setAdminToken(''); setData(null); setProxies([]); setProxyCredential(null); setError('已清除浏览器中的管理员令牌'); };
   const handleBackgroundUpload = (event: React.ChangeEvent<HTMLInputElement>) => { const file = event.target.files?.[0]; event.target.value = ''; setBackgroundError(''); if (!file) return; if (!file.type.startsWith('image/')) { setBackgroundError('请选择图片文件。'); return; } if (file.size > MAX_BACKGROUND_BYTES) { setBackgroundError('图片不能超过 3 MB，请先压缩后再上传。'); return; } const reader = new FileReader(); reader.onload = () => setBackground(String(reader.result)); reader.onerror = () => setBackgroundError('图片读取失败，请换一张图片重试。'); reader.readAsDataURL(file); };
   const targets = data?.targets ?? [];
-  const view = active === '设置' ? <SettingsPanel background={background} backgroundError={backgroundError} inputRef={backgroundInputRef} onUpload={handleBackgroundUpload} onClear={() => { setBackground(''); setBackgroundError(''); }} adminToken={adminToken} onSaveToken={saveAdminToken} onClearToken={clearAdminToken} /> : active === '服务器' ? <ServersView targets={targets} /> : active === '路由与档案' ? <RoutesProfilesView targets={targets} /> : active === '活动记录' ? <ActivityView targets={targets} /> : <DashboardView data={data} error={error} adminToken={adminToken} onSaveToken={saveAdminToken} />;
+  const view = active === '设置' ? <SettingsPanel background={background} backgroundError={backgroundError} inputRef={backgroundInputRef} onUpload={handleBackgroundUpload} onClear={() => { setBackground(''); setBackgroundError(''); }} adminToken={adminToken} onSaveToken={saveAdminToken} onClearToken={clearAdminToken} proxies={proxies} proxyCredential={proxyCredential} proxyError={proxyError} onCreateProxy={createProxy} onRotateProxy={rotateProxy} /> : active === '服务器' ? <ServersView targets={targets} /> : active === '路由与档案' ? <RoutesProfilesView targets={targets} /> : active === '活动记录' ? <ActivityView targets={targets} /> : <DashboardView data={data} error={error} adminToken={adminToken} onSaveToken={saveAdminToken} />;
   return <div className={background ? 'app-shell has-custom-background' : 'app-shell'}>{background && <div className="custom-background" style={{ backgroundImage: `url(${background})` }} aria-hidden="true" />}<aside className="sidebar glass-surface"><div className="brand"><span className="brand-mark">猫</span><div><strong>联动猫猫</strong><small>按需开服控制台</small></div></div><nav>{nav.map((item, index) => <button key={item} className={active === item ? 'nav-item active' : 'nav-item'} onClick={() => setActive(item)}><span className="nav-icon">{['⌂', '▦', '⌁', '◷', '⚙'][index]}</span>{item}</button>)}</nav><div className="sidebar-footer"><span className="pulse" />控制面在线</div></aside><main className="main-content"><header className="topbar"><div><p className="eyebrow">运营控制台 / {active}</p><h1>{active}</h1></div><div className="top-actions"><button className="icon-button" title="自定义网页背景" aria-label="自定义网页背景" onClick={() => setActive('设置')}>▧</button><button className="icon-button" title="切换主题" aria-label="切换主题" onClick={() => setDark((value) => !value)}>{dark ? '☼' : '☾'}</button><div className="avatar">管</div></div></header>{view}</main></div>;
 }
 

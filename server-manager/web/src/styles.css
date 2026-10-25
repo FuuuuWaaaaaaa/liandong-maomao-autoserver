@@ -41,3 +41,21 @@ nav { display:grid; gap: 5px; }.nav-item { display:flex; align-items:center; gap
 .token-form { display:grid; gap:8px; }.token-form label { color:#66798d; font-size:12px; font-weight:650; }.token-controls { display:flex; align-items:center; gap:8px; }.token-input { min-width:0; flex:1; border:1px solid rgba(100,125,153,.2); border-radius:9px; padding:9px 11px; color:inherit; background:rgba(255,255,255,.42); outline:none; font-size:12px; }.token-input:focus { border-color:#5b8bd4; box-shadow:0 0 0 3px rgba(91,139,212,.14); }.token-form small { color:#82909d; font-size:11px; line-height:1.5; }.token-settings { display:block; }.token-clear { margin-top:14px; }.notice .token-form { margin-top:12px; max-width:620px; }.notice .token-form label { color:#7a602e; }.notice .token-form small { color:#8d774e; }
 [data-theme="dark"] .token-input { background:rgba(11,19,29,.42); border-color:rgba(199,223,244,.16); }
 @media (max-width: 600px) { .token-controls { align-items:stretch; flex-direction:column; }.token-controls .primary-button { width:100%; } }
+.proxy-card { grid-column: 1 / -1; }
+.proxy-body { display:block; }
+.proxy-create-form { display:grid; gap:8px; max-width:720px; }
+.proxy-create-form label { color:#66798d; font-size:12px; font-weight:650; }
+.proxy-create-form small, .proxy-credential p { color:#82909d; font-size:11px; line-height:1.5; }
+.proxy-list { display:grid; gap:0; margin-top:22px; border-top:1px solid rgba(100,125,153,.1); }
+.proxy-row { display:flex; align-items:center; gap:14px; padding:14px 0; border-bottom:1px solid rgba(100,125,153,.1); }
+.proxy-row > div { min-width:0; flex:1; }
+.proxy-row strong, .proxy-row small { display:block; }
+.proxy-row strong { font-size:13px; }
+.proxy-row small { margin-top:4px; color:#82909d; font-size:11px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.proxy-credential { margin-top:20px; padding:16px; border:1px solid rgba(61,120,208,.18); border-radius:12px; background:rgba(61,120,208,.06); }
+.proxy-credential strong { font-size:13px; }
+.proxy-credential p { margin:5px 0 10px; }
+.proxy-credential pre { margin:0 0 12px; padding:12px; overflow:auto; border-radius:9px; color:#496886; background:rgba(255,255,255,.52); font:11px/1.7 ui-monospace, SFMono-Regular, Menlo, monospace; white-space:pre; }
+.copy-message { color:#3b9e70; align-self:center; }
+[data-theme="dark"] .proxy-credential pre { color:#c5ddf8; background:rgba(11,19,29,.55); }
+@media (max-width: 600px) { .proxy-row { align-items:flex-start; flex-direction:column; }.proxy-row .quiet-button { width:100%; } }
