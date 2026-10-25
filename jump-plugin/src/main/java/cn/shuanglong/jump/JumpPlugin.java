@@ -43,7 +43,8 @@ public final class JumpPlugin {
         if (manager == null || event.getPlayer().getVirtualHost().isEmpty()) return;
         String hostname = ((InetSocketAddress) event.getPlayer().getVirtualHost().get()).getHostString();
         routes.resolve(hostname).ifPresent(route -> {
-            proxy.getServer(route.entryProfile()).ifPresent(server -> {
+            String initialServer = route.ready() ? route.id() : route.entryProfile();
+            proxy.getServer(initialServer).ifPresent(server -> {
                 event.setInitialServer(server);
                 if (!route.ready()) {
                     queues.enqueue(route.id(), event.getPlayer());
