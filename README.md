@@ -91,6 +91,38 @@ docker run --rm --name liandong-maomao-server \
   ghcr.io/fuuuuwaaaaaaa/liandong-maomao-server:latest
 ```
 
+### 不使用 Compose 时执行外部 MySQL 迁移
+
+如果管理器已经通过 `docker run` 启动，数据库迁移可以直接在正在运行的管理器容器中执行。先查看容器名称：
+
+```bash
+sudo docker ps --format 'table {{.Names}}\t{{.Image}}\t{{.Ports}}'
+```
+
+假设容器名称为 `liandong-maomao-server`，执行一次初始迁移：
+
+```bash
+sudo docker exec -it liandong-maomao-server node /app/dist/migrate.js
+```
+
+看到 `数据库迁移完成` 后，刷新 WebUI；如果仍显示旧状态，可以重启管理器：
+
+```bash
+sudo docker restart liandong-maomao-server
+```
+
+迁移命令会复用管理器容器中的 `SQL_TYPE` 和 `SQL_ADDRESS`，所以它连接的就是当前配置的外部 MySQL。以后升级镜像时，先停止旧容器、用相同环境变量启动新容器，再执行一次上述迁移命令。`SQL_ADDRESS` 中的 MySQL 用户、密码、主机、端口和数据库必须提前创建并允许 Docker 所在主机访问；密码中的 `@`、`#`、`/` 等特殊字符需要进行 URL 编码。
+
+也可以用同一个环境文件启动一次性迁移容器，不进入正在运行的管理器：
+
+```bash
+sudo docker run --rm --env-file /绝对路径/manager.env \
+  ghcr.io/fuuuuwaaaaaaa/liandong-maomao-server:latest \
+  node /app/dist/migrate.js
+```
+
+如果外部 MySQL 地址填写的是 `127.0.0.1`，从容器内访问的会是容器自身；请改用 MySQL 所在服务器的实际内网 IP 或域名。只有 MySQL 和管理器在同一个 Docker 网络时，才使用对应的容器服务名。
+
 管理器变量如下：
 
 | 变量 | 必填 | 说明 |
