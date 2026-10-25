@@ -1,4 +1,4 @@
-package cn.shuanglong.jump;
+package cn.liandongmaomao.jump;
 
 import java.util.List;
 import java.util.Locale;

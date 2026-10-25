@@ -1,4 +1,4 @@
-package cn.shuanglong.jump;
+package cn.liandongmaomao.jump;
 
 import com.google.gson.Gson;
 import com.google.gson.JsonObject;

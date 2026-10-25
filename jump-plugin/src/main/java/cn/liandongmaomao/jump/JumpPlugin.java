@@ -1,4 +1,4 @@
-package cn.shuanglong.jump;
+package cn.liandongmaomao.jump;
 
 import com.google.inject.Inject;
 import com.velocitypowered.api.event.Subscribe;
@@ -15,7 +15,7 @@ import java.time.Duration;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 
-@Plugin(id = "shuanglong-jump", name = "双龙跳转", version = "0.1.0", description = "按域名路由、排队唤醒与代理心跳插件", authors = {"Shuanglong"})
+@Plugin(id = "liandong-maomao-jump", name = "联动猫猫跳转", version = "0.1.0", description = "按域名路由、排队唤醒与代理心跳插件", authors = {"联动猫猫"})
 public final class JumpPlugin {
     private final ProxyServer proxy;
     private final Logger logger;
@@ -35,7 +35,7 @@ public final class JumpPlugin {
         manager = new ManagerApiClient(baseUrl, proxyId, token, Duration.ofSeconds(5));
         refreshConfig();
         heartbeatTask = proxy.getScheduler().buildTask(this, this::sendHeartbeat).repeat(15, TimeUnit.SECONDS).schedule();
-        logger.info("双龙跳转插件已启动，管理器: {}", baseUrl);
+        logger.info("联动猫猫跳转插件已启动，管理器: {}", baseUrl);
     }
 
     @Subscribe

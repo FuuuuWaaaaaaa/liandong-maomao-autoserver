@@ -1,8 +1,8 @@
 {
-  "name": "shuanglong-server-manager",
+  "name": "liandong-maomao-server-manager",
   "version": "0.1.0",
   "private": true,
-  "description": "双龙按需开服管理器：Pterodactyl、Velocity 与 MySQL 控制面",
+  "description": "联动猫猫按需开服管理器：Pterodactyl、Velocity 与 MySQL 控制面",
   "type": "module",
   "engines": { "node": ">=22" },
   "scripts": {
