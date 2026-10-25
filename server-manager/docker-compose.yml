@@ -1,5 +1,6 @@
 services:
   manager:
+    image: ghcr.io/fuuuuwaaaaaaa/liandong-maomao-server:latest
     build: .
     restart: unless-stopped
     env_file: .env
@@ -9,9 +10,10 @@ services:
       mysql-migration:
         condition: service_completed_successfully
   mysql-migration:
+    image: ghcr.io/fuuuuwaaaaaaa/liandong-maomao-server:latest
     build: .
     restart: "no"
     env_file: .env
     command: ["node", "dist/migrate.js"]
 
-# MySQL intentionally stays external. Set DATABASE_URL to your independent SQL service.
+# MySQL intentionally stays external. Set SQL_TYPE=mysql and SQL_ADDRESS to your independent SQL service.

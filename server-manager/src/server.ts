@@ -10,7 +10,7 @@ import { MemoryStore, MysqlStore, type Store } from './store.js';
 import { PterodactylClient } from './pterodactyl.js';
 
 const config = loadConfig();
-const store: Store = config.storageMode === 'mysql' ? await MysqlStore.connect(config.databaseUrl!) : new MemoryStore(config.proxyTokens);
+const store: Store = config.sqlType === 'mysql' ? await MysqlStore.connect(config.sqlAddress!) : new MemoryStore(config.proxyTokens);
 const pterodactyl = new PterodactylClient(config.pterodactylUrl, config.pterodactylToken, config.pterodactylTimeoutMs);
 const app = Fastify({ logger: true });
 await app.register(cors, { origin: true });
@@ -22,7 +22,7 @@ async function requireProxy(request: FastifyRequest, reply: FastifyReply): Promi
 function requireAdmin(request: FastifyRequest, reply: FastifyReply): boolean { if (!config.adminApiToken || bearer(request) !== config.adminApiToken) { void reply.code(401).send({ code: 'UNAUTHORIZED', message: '需要管理员凭证' }); return false; } return true; }
 
 app.get('/health/live', async () => ({ status: 'ok', service: 'liandong-maomao-server-manager' }));
-app.get('/health/ready', async (_request, reply) => { try { await store.listTargets(); return { status: 'ready', storage: config.storageMode }; } catch { return reply.code(503).send({ status: 'not_ready' }); } });
+app.get('/health/ready', async (_request, reply) => { try { await store.listTargets(); return { status: 'ready', sqlType: config.sqlType }; } catch { return reply.code(503).send({ status: 'not_ready' }); } });
 
 app.get('/api/v1/proxy/config', async (request, reply) => { const proxyId = await requireProxy(request, reply); if (!proxyId) return; const targets = await store.listTargets(); return { apiVersion: 'v1', proxyId, queue: { transferNoticeSeconds: 5, transferStabilitySeconds: 2, heartbeatSeconds: 15 }, targets: targets.filter((target) => target.enabled).map((target) => ({ id: target.id, displayName: target.displayName, aliases: target.aliases, entryProfile: target.entryProfile, lifecycle: target.lifecycle, rawState: target.rawState, ready: target.ready })) }; });
 

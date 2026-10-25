@@ -1,16 +1,10 @@
 import 'dotenv/config';
 
-function required(name: string): string {
-  const value = process.env[name];
-  if (!value) throw new Error(`缺少环境变量 ${name}`);
-  return value;
-}
-
 export interface AppConfig {
   host: string;
   port: number;
-  storageMode: 'mysql' | 'memory';
-  databaseUrl?: string;
+  sqlType: 'mysql' | 'memory';
+  sqlAddress?: string;
   adminApiToken?: string;
   proxyTokens: Map<string, string>;
   pterodactylUrl?: string;
@@ -20,8 +14,10 @@ export interface AppConfig {
 }
 
 export function loadConfig(): AppConfig {
-  const storageMode = (process.env.STORAGE_MODE ?? 'mysql') as 'mysql' | 'memory';
-  if (storageMode !== 'mysql' && storageMode !== 'memory') throw new Error('STORAGE_MODE 必须是 mysql 或 memory');
+  const sqlType = (process.env.SQL_TYPE ?? process.env.STORAGE_MODE ?? 'mysql').toLowerCase() as 'mysql' | 'memory';
+  if (sqlType !== 'mysql' && sqlType !== 'memory') throw new Error('SQL_TYPE 必须是 mysql 或 memory；生产环境请使用 mysql');
+  const sqlAddress = process.env.SQL_ADDRESS ?? process.env.DATABASE_URL;
+  if (sqlType === 'mysql' && !sqlAddress) throw new Error('缺少环境变量 SQL_ADDRESS（兼容变量：DATABASE_URL）');
   const proxyTokens = new Map<string, string>();
   for (const item of (process.env.PROXY_TOKENS ?? '').split(',').map((x) => x.trim()).filter(Boolean)) {
     const [id, token] = item.split('=');
@@ -30,8 +26,8 @@ export function loadConfig(): AppConfig {
   return {
     host: process.env.HOST ?? '0.0.0.0',
     port: Number(process.env.PORT ?? 8080),
-    storageMode,
-    databaseUrl: storageMode === 'mysql' ? required('DATABASE_URL') : process.env.DATABASE_URL,
+    sqlType,
+    sqlAddress,
     adminApiToken: process.env.ADMIN_API_TOKEN,
     proxyTokens,
     pterodactylUrl: process.env.PTERODACTYL_URL,
