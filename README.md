@@ -37,7 +37,7 @@ SQL_TYPE=memory PROXY_TOKENS='proxy-main=dev-proxy-token' ADMIN_API_TOKEN=dev-ad
 管理器当前使用一个由环境变量 `ADMIN_API_TOKEN` 设置的管理员 API 令牌进行控制台访问控制。它不是 Pterodactyl Token，也不是 Velocity 代理令牌。浏览器输入框只负责验证这个已在服务端设置的值，不会替你创建或修改服务端令牌。
 
 1. 启动管理器前设置 `ADMIN_API_TOKEN`，建议使用长度至少 32 位的随机值。例如 Docker Compose 的 `.env` 中写入 `ADMIN_API_TOKEN=一串随机值`，直接运行镜像时使用 `-e ADMIN_API_TOKEN='一串随机值'`。
-2. 如果修改了 `.env` 或 Docker 环境变量，必须重启管理器容器/进程；服务启动后不会动态读取新的环境变量。
+2. 如果修改了 `.env` 或 Docker 环境变量，必须重建管理器容器/重启进程；服务启动后不会动态读取新的环境变量。Compose 部署可执行 `docker compose up -d --force-recreate manager`。
 3. 打开与管理器同一个地址的 WebUI。首次访问总览页会显示“需要管理员会话”。
 4. 在提示框中输入与服务端环境变量完全一致的 `ADMIN_API_TOKEN`，点击“保存并验证”；也可以进入“设置 → 管理员令牌”完成相同操作。
 5. 验证成功后，浏览器才会将令牌保存在当前浏览器的本地存储中，后续请求通过 `Authorization: Bearer <令牌>` 发送到管理器。
