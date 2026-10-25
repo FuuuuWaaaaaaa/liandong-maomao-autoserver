@@ -88,6 +88,7 @@ docker run --rm --name liandong-maomao-server \
   -e ADMIN_API_TOKEN='替换为随机管理员令牌' \
   -e PTERODACTYL_URL='https://panel.example.net' \
   -e PTERODACTYL_API_TOKEN='替换为面板 Client API Token' \
+  -e PROXY_TOKENS='proxy-main=dev-proxy-token' \
   ghcr.io/fuuuuwaaaaaaa/liandong-maomao-server:latest
 ```
 
