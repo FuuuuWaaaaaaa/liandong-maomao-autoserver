@@ -1,8 +1,0 @@
-{
-  "id": "liandong-maomao-jump",
-  "name": "联动猫猫跳转",
-  "version": "0.1.0",
-  "description": "按域名路由、排队唤醒与代理心跳插件",
-  "authors": ["联动猫猫"],
-  "main": "cn.liandongmaomao.jump.JumpPlugin"
-}

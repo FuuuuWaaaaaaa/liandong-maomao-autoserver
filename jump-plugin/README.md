@@ -2,6 +2,28 @@
 
 这是 Velocity 代理侧组件。它只保存管理器代理令牌，负责接收客户端原始域名、选择兼容入口、发送代理心跳，并把唤醒与队列状态交给 `server-manager`。
 
+## 配置文件
+
+插件首次启动时会在 Velocity 数据目录生成 `plugins/liandong-maomao-jump/config.yml`。可以直接编辑该文件，不需要把配置写入启动命令：
+
+```yaml
+manager:
+  base-url: "https://manager.example.net"
+  proxy-id: "proxy-main"
+  token: "${JUMP_MANAGER_TOKEN}"
+  request-timeout-ms: 5000
+  config-refresh-seconds: 30
+  heartbeat-seconds: 15
+queue:
+  transfer-notice-seconds: 5
+  transfer-stability-seconds: 2
+  offline-ticket-ttl-seconds: 1800
+messages:
+  locale: "zh_CN"
+```
+
+`manager.token` 支持 `${环境变量名}` 占位符。推荐使用 `${JUMP_MANAGER_TOKEN}`，然后在 Velocity 进程环境中设置令牌；也可以直接填写令牌，但不应将包含真实令牌的配置文件提交到 Git。`manager.proxy-id` 必须与管理器 `PROXY_TOKENS` 左侧的代理 ID 一致。`base-url`、`proxy-id` 和时间参数均从该文件读取，修改后重启代理生效。
+
 ## 构建
 
 需要 Java 21 与 Gradle：
@@ -10,7 +32,7 @@
 ./gradlew shadowJar
 ```
 
-生成的插件位于 `build/libs/liandong-maomao-jump-plugin-0.1.0.jar`。生产环境通过 `JUMP_MANAGER_URL`、`JUMP_PROXY_ID`、`JUMP_MANAGER_TOKEN` 注入管理器地址与代理凭证，不要把真实凭证写进仓库。
+生成的插件位于 `build/libs/liandong-maomao-jump-plugin-0.1.0.jar`。生产环境只需要通过 `JUMP_MANAGER_TOKEN` 注入配置文件中的代理令牌占位符，不要把真实凭证写进仓库。
 
 ## 运行边界
 

@@ -4,7 +4,7 @@ plugins {
 }
 
 group = 'cn.liandongmaomao'
-version = '0.1.0'
+version = providers.gradleProperty('pluginVersion').orElse('0.1.0').get()
 
 repositories {
     mavenCentral()
@@ -14,6 +14,7 @@ repositories {
 dependencies {
     compileOnly 'com.velocitypowered:velocity-api:3.4.0'
     implementation 'com.google.code.gson:gson:2.11.0'
+    implementation 'org.yaml:snakeyaml:2.3'
     annotationProcessor 'com.velocitypowered:velocity-api:3.4.0'
     testImplementation 'org.junit.jupiter:junit-jupiter:5.11.4'
 }
@@ -22,3 +23,19 @@ java { toolchain { languageVersion = JavaLanguageVersion.of(21) } }
 tasks.withType(JavaCompile).configureEach { options.encoding = 'UTF-8' }
 tasks.named('test') { useJUnitPlatform() }
 tasks.named('shadowJar') { archiveClassifier = '' }
+
+def pluginVersion = project.version.toString()
+def generatedVersionDir = layout.buildDirectory.dir('generated/sources/pluginVersion')
+sourceSets.main.java.srcDir(generatedVersionDir)
+tasks.register('generatePluginVersion') {
+    outputs.dir(generatedVersionDir)
+    doLast {
+        def versionFile = generatedVersionDir.get().file('cn/liandongmaomao/jump/PluginVersion.java').asFile
+        versionFile.parentFile.mkdirs()
+        versionFile.text = "package cn.liandongmaomao.jump; public final class PluginVersion { public static final String VALUE = \"${pluginVersion}\"; private PluginVersion() {} }"
+    }
+}
+tasks.named('compileJava') { dependsOn('generatePluginVersion') }
+processResources {
+    filesMatching('velocity-plugin.json') { expand(version: pluginVersion) }
+}

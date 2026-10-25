@@ -7,35 +7,44 @@ import com.velocitypowered.api.event.player.PlayerChooseInitialServerEvent;
 import com.velocitypowered.api.event.proxy.ProxyInitializeEvent;
 import com.velocitypowered.api.proxy.ProxyServer;
 import com.velocitypowered.api.plugin.Plugin;
+import com.velocitypowered.api.plugin.annotation.DataDirectory;
 import com.velocitypowered.api.scheduler.ScheduledTask;
 import org.slf4j.Logger;
 
 import java.net.InetSocketAddress;
+import java.nio.file.Path;
 import java.time.Duration;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 
-@Plugin(id = "liandong-maomao-jump", name = "联动猫猫跳转", version = "0.1.0", description = "按域名路由、排队唤醒与代理心跳插件", authors = {"联动猫猫"})
+@Plugin(id = "liandong-maomao-jump", name = "联动猫猫跳转", version = PluginVersion.VALUE, description = "按域名路由、排队唤醒与代理心跳插件", authors = {"联动猫猫"})
 public final class JumpPlugin {
     private final ProxyServer proxy;
     private final Logger logger;
+    private final Path dataDirectory;
     private final RouteResolver routes = new RouteResolver();
     private final QueueCoordinator queues = new QueueCoordinator(Duration.ofSeconds(5));
     private ManagerApiClient manager;
     private ScheduledTask heartbeatTask;
+    private ScheduledTask configTask;
 
     @Inject
-    public JumpPlugin(ProxyServer proxy, Logger logger) { this.proxy = proxy; this.logger = logger; }
+    public JumpPlugin(ProxyServer proxy, Logger logger, @DataDirectory Path dataDirectory) { this.proxy = proxy; this.logger = logger; this.dataDirectory = dataDirectory; }
 
     @Subscribe
     public void onProxyInitialization(ProxyInitializeEvent event) {
-        String baseUrl = System.getenv().getOrDefault("JUMP_MANAGER_URL", "http://127.0.0.1:8080");
-        String proxyId = System.getenv().getOrDefault("JUMP_PROXY_ID", "proxy-main");
-        String token = System.getenv().getOrDefault("JUMP_MANAGER_TOKEN", "");
-        manager = new ManagerApiClient(baseUrl, proxyId, token, Duration.ofSeconds(5));
+        PluginConfig.Values config;
+        try {
+            config = PluginConfig.load(dataDirectory, logger);
+        } catch (Exception error) {
+            logger.error("读取插件 config.yml 失败，插件不会启动管理器连接", error);
+            return;
+        }
+        manager = new ManagerApiClient(config.managerUrl(), config.proxyId(), config.token(), config.requestTimeout());
         refreshConfig();
-        heartbeatTask = proxy.getScheduler().buildTask(this, this::sendHeartbeat).repeat(15, TimeUnit.SECONDS).schedule();
-        logger.info("联动猫猫跳转插件已启动，管理器: {}", baseUrl);
+        heartbeatTask = proxy.getScheduler().buildTask(this, this::sendHeartbeat).repeat(config.heartbeatSeconds(), TimeUnit.SECONDS).schedule();
+        configTask = proxy.getScheduler().buildTask(this, this::refreshConfig).repeat(config.configRefreshSeconds(), TimeUnit.SECONDS).schedule();
+        logger.info("联动猫猫跳转插件已启动，管理器: {}，配置文件: {}", config.managerUrl(), dataDirectory.resolve("config.yml"));
     }
 
     @Subscribe
@@ -64,5 +73,5 @@ public final class JumpPlugin {
 
     private void refreshConfig() { manager.fetchConfig().thenAccept(routes::replace).exceptionally(error -> { logger.warn("刷新管理器配置失败: {}", error.getMessage()); return null; }); }
     private void sendHeartbeat() { if (manager == null) return; List<ManagerApiClient.HeartbeatTarget> observations = routes.targets().stream().map(target -> new ManagerApiClient.HeartbeatTarget(target.id(), proxy.getServer(target.id()).map(server -> server.getPlayersConnected().size()).orElse(0), "fresh")).toList(); manager.sendHeartbeat(observations).exceptionally(error -> { logger.warn("发送管理器心跳失败: {}", error.getMessage()); return null; }); }
-    public void shutdown() { if (heartbeatTask != null) heartbeatTask.cancel(); }
+    public void shutdown() { if (heartbeatTask != null) heartbeatTask.cancel(); if (configTask != null) configTask.cancel(); }
 }
