@@ -17,9 +17,25 @@ await app.register(cors, { origin: true });
 const webRoot = join(process.cwd(), 'web', 'dist');
 if (existsSync(webRoot)) await app.register(fastifyStatic, { root: webRoot, prefix: '/' });
 
-function bearer(request: FastifyRequest): string | undefined { const header = request.headers.authorization; return header?.startsWith('Bearer ') ? header.slice(7) : undefined; }
+function bearer(request: FastifyRequest): string | undefined {
+  const header = request.headers.authorization?.trim();
+  if (!header) return undefined;
+  const separator = header.indexOf(' ');
+  if (separator < 0 || header.slice(0, separator).toLowerCase() !== 'bearer') return undefined;
+  return header.slice(separator + 1).trim() || undefined;
+}
 async function requireProxy(request: FastifyRequest, reply: FastifyReply): Promise<string | undefined> { const token = bearer(request); if (!token) { void reply.code(401).send({ code: 'UNAUTHORIZED', message: '需要代理凭证' }); return undefined; } const configured = [...config.proxyTokens.entries()].find(([, value]) => value === token); const proxyId = configured?.[0] ?? await store.authenticateProxy(token); if (!proxyId) { void reply.code(401).send({ code: 'UNAUTHORIZED', message: '代理凭证无效' }); return undefined; } return proxyId; }
-function requireAdmin(request: FastifyRequest, reply: FastifyReply): boolean { if (!config.adminApiToken || bearer(request) !== config.adminApiToken) { void reply.code(401).send({ code: 'UNAUTHORIZED', message: '需要管理员凭证' }); return false; } return true; }
+function requireAdmin(request: FastifyRequest, reply: FastifyReply): boolean {
+  if (!config.adminApiToken) {
+    void reply.code(503).send({ code: 'ADMIN_AUTH_NOT_CONFIGURED', message: '管理器未配置 ADMIN_API_TOKEN，请设置后重启服务' });
+    return false;
+  }
+  if (bearer(request) !== config.adminApiToken) {
+    void reply.code(401).send({ code: 'ADMIN_TOKEN_INVALID', message: '管理员令牌无效，请确认 ADMIN_API_TOKEN 并重启管理器' });
+    return false;
+  }
+  return true;
+}
 
 app.get('/health/live', async () => ({ status: 'ok', service: 'liandong-maomao-server-manager' }));
 app.get('/health/ready', async (_request, reply) => { try { await store.listTargets(); return { status: 'ready', sqlType: config.sqlType }; } catch { return reply.code(503).send({ status: 'not_ready' }); } });

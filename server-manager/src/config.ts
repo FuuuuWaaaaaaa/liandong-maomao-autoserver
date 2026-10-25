@@ -28,7 +28,7 @@ export function loadConfig(): AppConfig {
     port: Number(process.env.PORT ?? 8080),
     sqlType,
     sqlAddress,
-    adminApiToken: process.env.ADMIN_API_TOKEN,
+    adminApiToken: process.env.ADMIN_API_TOKEN?.trim() || undefined,
     proxyTokens,
     pterodactylUrl: process.env.PTERODACTYL_URL,
     pterodactylToken: process.env.PTERODACTYL_API_TOKEN,

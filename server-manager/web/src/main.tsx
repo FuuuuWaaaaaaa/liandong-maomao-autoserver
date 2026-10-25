@@ -15,7 +15,7 @@ function StatusBadge({ state }: { state: string }) { return <span className={sta
 function AdminTokenForm({ initialToken, onSave }: { initialToken: string; onSave: (token: string) => void }) {
   const [value, setValue] = useState(initialToken);
   useEffect(() => setValue(initialToken), [initialToken]);
-  return <form className="token-form" onSubmit={(event) => { event.preventDefault(); onSave(value); }}><label htmlFor="admin-token">管理员令牌</label><div className="token-controls"><input id="admin-token" className="token-input" type="password" value={value} onChange={(event) => setValue(event.target.value)} placeholder="输入 ADMIN_API_TOKEN" autoComplete="current-password" /><button className="primary-button" type="submit">保存并验证</button></div><small>令牌只保存在当前浏览器，并通过 HTTPS Bearer 请求发送给管理器。</small></form>;
+  return <form className="token-form" onSubmit={(event) => { event.preventDefault(); onSave(value); }}><label htmlFor="admin-token">管理员令牌</label><div className="token-controls"><input id="admin-token" className="token-input" type="password" value={value} onChange={(event) => setValue(event.target.value)} placeholder="输入 ADMIN_API_TOKEN" autoComplete="off" /><button className="primary-button" type="submit">保存并验证</button></div><small>此处只验证管理器已配置的令牌；修改服务端环境变量后必须重启管理器。验证成功后才会保存在当前浏览器。</small></form>;
 }
 
 function ServerTable({ targets }: { targets: Target[] }) {
@@ -26,7 +26,7 @@ function DashboardView({ data, error, adminToken, onSaveToken }: { data: Dashboa
   const counts = data?.counts ?? {};
   const targets = data?.targets ?? [];
   return <>
-    {error && <div className="notice warning"><span>!</span><div><strong>需要管理员会话</strong><p>{error}。请输入启动管理器时设置的 `ADMIN_API_TOKEN`。</p><AdminTokenForm initialToken={adminToken} onSave={onSaveToken} /></div></div>}
+    {error && <div className="notice warning"><span>!</span><div><strong>需要管理员会话</strong><p>{error}</p><AdminTokenForm initialToken={adminToken} onSave={onSaveToken} /></div></div>}
     <section className="metric-grid">{[['READY', '就绪服务器', '↗'], ['STARTING', '正在启动', '◌'], ['STOPPING', '正在停止', '↘'], ['OFFLINE', '离线服务器', '○']].map(([key, title, icon]) => <article className="metric glass-surface" key={key}><div className="metric-head"><span>{title}</span><span className="metric-icon">{icon}</span></div><strong>{counts[key] ?? 0}</strong><small>{key === 'READY' ? '接收玩家中' : key === 'OFFLINE' ? '等待下一次唤醒' : '需要持续观察'}</small></article>)}</section>
     <section className="content-grid"><article className="panel glass-surface servers-panel"><div className="panel-heading"><div><p className="eyebrow">实时状态</p><h2>托管服务器</h2></div><button className="quiet-button" onClick={() => location.reload()}>刷新 <span>↻</span></button></div><ServerTable targets={targets} /></article><aside className="panel glass-surface activity-panel"><div className="panel-heading"><div><p className="eyebrow">安全提示</p><h2>运行守则</h2></div></div><div className="rule-list"><div><span className="rule-icon blue">⌁</span><div><strong>心跳新鲜度</strong><p>缺失或过期的代理心跳不会触发自动关服。</p></div></div><div><span className="rule-icon amber">◷</span><div><strong>启动确认</strong><p>面板显示 running 后，还要通过 Minecraft 就绪探测。</p></div></div><div><span className="rule-icon green">✓</span><div><strong>优雅停止</strong><p>空闲计时完成后只发送 graceful stop。</p></div></div></div></aside></section>
   </>;
@@ -63,9 +63,39 @@ function App() {
   const backgroundInputRef = useRef<HTMLInputElement>(null);
   useEffect(() => { document.documentElement.dataset.theme = dark ? 'dark' : 'light'; localStorage.setItem('theme', dark ? 'dark' : 'light'); }, [dark]);
   useEffect(() => { if (background) localStorage.setItem('custom-background', background); else localStorage.removeItem('custom-background'); }, [background]);
-  const loadDashboard = (token: string) => { setError(''); fetch('/api/v1/admin/dashboard', { headers: { Authorization: `Bearer ${token}` } }).then(async (response) => { if (!response.ok) throw new Error('令牌无效或已过期'); return response.json(); }).then(setData).catch((reason) => setError(reason instanceof Error ? reason.message : '管理员接口请求失败')); };
+  const loadDashboard = (token: string) => {
+    if (!token) { setData(null); setError('尚未设置管理员令牌'); return; }
+    setError('');
+    fetch('/api/v1/admin/dashboard', { headers: { Authorization: `Bearer ${token}` } }).then(async (response) => {
+      const body = await response.json().catch(() => ({})) as { message?: string };
+      if (!response.ok) {
+        if (response.status === 503) throw new Error(body.message ?? '管理器未配置 ADMIN_API_TOKEN，请设置后重启服务');
+        if (response.status === 401) throw new Error(body.message ?? '管理员令牌无效，请确认 ADMIN_API_TOKEN 并重启管理器');
+        throw new Error(body.message ?? `管理员接口请求失败（HTTP ${response.status}）`);
+      }
+      return body as Dashboard;
+    }).then(setData).catch((reason) => setError(reason instanceof Error ? reason.message : '管理员接口请求失败，请检查管理器地址和网络连接'));
+  };
   useEffect(() => { loadDashboard(adminToken); }, []);
-  const saveAdminToken = (token: string) => { const normalized = token.trim(); if (!normalized) { setError('管理员令牌不能为空'); return; } localStorage.setItem('admin-token', normalized); setAdminToken(normalized); loadDashboard(normalized); };
+  const saveAdminToken = (token: string) => {
+    const normalized = token.trim();
+    if (!normalized) { setError('管理员令牌不能为空'); return; }
+    setError('正在验证管理员令牌…');
+    fetch('/api/v1/admin/dashboard', { headers: { Authorization: `Bearer ${normalized}` } }).then(async (response) => {
+      const body = await response.json().catch(() => ({})) as { message?: string };
+      if (!response.ok) {
+        if (response.status === 503) throw new Error(body.message ?? '管理器未配置 ADMIN_API_TOKEN，请设置后重启服务');
+        if (response.status === 401) throw new Error(body.message ?? '管理员令牌无效，请确认 ADMIN_API_TOKEN 并重启管理器');
+        throw new Error(body.message ?? `管理员接口请求失败（HTTP ${response.status}）`);
+      }
+      return body as Dashboard;
+    }).then((dashboard) => {
+      localStorage.setItem('admin-token', normalized);
+      setAdminToken(normalized);
+      setData(dashboard);
+      setError('');
+    }).catch((reason) => setError(reason instanceof Error ? reason.message : '管理员接口请求失败，请检查管理器地址和网络连接'));
+  };
   const clearAdminToken = () => { localStorage.removeItem('admin-token'); setAdminToken(''); setData(null); setError('已清除浏览器中的管理员令牌'); };
   const handleBackgroundUpload = (event: React.ChangeEvent<HTMLInputElement>) => { const file = event.target.files?.[0]; event.target.value = ''; setBackgroundError(''); if (!file) return; if (!file.type.startsWith('image/')) { setBackgroundError('请选择图片文件。'); return; } if (file.size > MAX_BACKGROUND_BYTES) { setBackgroundError('图片不能超过 3 MB，请先压缩后再上传。'); return; } const reader = new FileReader(); reader.onload = () => setBackground(String(reader.result)); reader.onerror = () => setBackgroundError('图片读取失败，请换一张图片重试。'); reader.readAsDataURL(file); };
   const targets = data?.targets ?? [];
