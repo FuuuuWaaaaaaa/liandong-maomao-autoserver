@@ -26,7 +26,7 @@ CREATE TABLE IF NOT EXISTS presence_snapshots (
 CREATE TABLE IF NOT EXISTS queue_tickets (
   id CHAR(36) PRIMARY KEY, target_id VARCHAR(64) NOT NULL, player_uuid CHAR(36) NOT NULL, last_player_name VARCHAR(32), ticket_class ENUM('online','offline') NOT NULL, state ENUM('waiting','promoted','transferred','failed','expired') NOT NULL,
   enqueue_sequence BIGINT NOT NULL, created_at DATETIME(3) NOT NULL, updated_at DATETIME(3) NOT NULL, expires_at DATETIME(3) NOT NULL, last_status_snapshot TEXT,
-  active_player_key VARCHAR(128) AS (IF(state IN ('waiting','promoted'), CONCAT(target_id, ':', player_uuid), NULL)) STORED,
+  active_player_key VARCHAR(128),
   UNIQUE KEY uq_active_ticket (active_player_key), INDEX idx_queue_target_state (target_id, state, enqueue_sequence), CONSTRAINT fk_ticket_target FOREIGN KEY (target_id) REFERENCES target_servers(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
 CREATE TABLE IF NOT EXISTS queue_events (
