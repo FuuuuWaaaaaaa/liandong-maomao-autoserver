@@ -4,6 +4,7 @@
   "private": true,
   "description": "双龙按需开服管理器：Pterodactyl、Velocity 与 MySQL 控制面",
   "type": "module",
+  "engines": { "node": ">=22" },
   "scripts": {
     "dev": "tsx watch src/server.ts",
     "start": "node dist/server.js",

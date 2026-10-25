@@ -23,6 +23,8 @@ cp .env.example .env
 STORAGE_MODE=memory PROXY_TOKENS='proxy-main=dev-proxy-token' ADMIN_API_TOKEN=dev-admin-token npm run dev
 ```
 
+本地管理器建议使用 Node.js 22 或更高版本。
+
 打开 `http://127.0.0.1:8080/` 可查看控制台。WebUI 读取浏览器 `localStorage.admin-token` 作为管理员 Token；正式部署应改为完整的会话登录流程并启用 TLS。
 
 ## MySQL 与 Docker
