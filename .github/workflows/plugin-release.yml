@@ -29,6 +29,8 @@ jobs:
 
       - name: 配置 Gradle
         uses: gradle/actions/setup-gradle@v4
+        with:
+          validate-wrappers: false
 
       - name: 解析版本
         id: version
