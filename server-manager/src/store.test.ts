@@ -17,4 +17,11 @@ describe('代理凭证管理', () => {
     expect(await store.authenticateProxy('first-token')).toBeUndefined();
     expect(await store.authenticateProxy('second-token')).toBe('proxy-test');
   });
+
+  it('没有目标服务器时，心跳仍会更新代理最近连接时间', async () => {
+    const store = new MemoryStore(new Map([['proxy-test', 'first-token']]));
+    const observedAt = '2026-10-30T04:17:57.000Z';
+    await store.touchProxy('proxy-test', observedAt);
+    expect((await store.listProxies())[0]?.lastSeenAt).toBe(observedAt);
+  });
 });

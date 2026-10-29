@@ -58,6 +58,7 @@ export interface Store {
   listTickets(targetId: string): Promise<QueueTicket[]>;
   expireTickets(now?: Date): Promise<number>;
   authenticateProxy(token: string): Promise<string | undefined>;
+  touchProxy(proxyId: string, observedAt: string): Promise<void>;
   listProxies(): Promise<ProxySummary[]>;
   createProxy(input: { id: string; name: string; token: string }): Promise<ProxySummary | undefined>;
   rotateProxyToken(id: string, token: string): Promise<ProxySummary | undefined>;
@@ -92,6 +93,10 @@ export class MemoryStore implements Store {
 
   async close(): Promise<void> {}
   async authenticateProxy(token: string): Promise<string | undefined> { return [...this.proxyTokens.entries()].find(([, configured]) => configured === token)?.[0]; }
+  async touchProxy(proxyId: string, observedAt: string): Promise<void> {
+    const proxy = this.proxies.get(proxyId);
+    if (proxy) this.proxies.set(proxyId, { ...proxy, lastSeenAt: observedAt });
+  }
   async listProxies(): Promise<ProxySummary[]> { return [...this.proxies.values()]; }
   async createProxy(input: { id: string; name: string; token: string }): Promise<ProxySummary | undefined> { if (this.proxies.has(input.id)) return undefined; this.proxyTokens.set(input.id, input.token); const proxy = { id: input.id, name: input.name, tokenHint: `****${input.token.slice(-4)}`, enabled: true }; this.proxies.set(input.id, proxy); return proxy; }
   async rotateProxyToken(id: string, token: string): Promise<ProxySummary | undefined> { const proxy = this.proxies.get(id); if (!proxy) return undefined; this.proxyTokens.set(id, token); const updated = { ...proxy, tokenHint: `****${token.slice(-4)}` }; this.proxies.set(id, updated); return updated; }
@@ -146,6 +151,7 @@ export class MysqlStore implements Store {
   static async connect(url: string): Promise<MysqlStore> { const pool = mysql.createPool(url); await pool.query('SELECT 1'); return new MysqlStore(pool); }
   async close(): Promise<void> { await this.pool.end(); }
   async authenticateProxy(token: string): Promise<string | undefined> { const [rows] = await this.pool.query<any[]>('SELECT id FROM proxy_instances WHERE token_hash=? AND enabled=1 LIMIT 1', [hashToken(token)]); return rows[0]?.id; }
+  async touchProxy(proxyId: string, observedAt: string): Promise<void> { await this.pool.query('UPDATE proxy_instances SET last_seen_at=? WHERE id=? AND enabled=1', [new Date(observedAt), proxyId]); }
   async listProxies(): Promise<ProxySummary[]> { const [rows] = await this.pool.query<any[]>('SELECT id,name,token_hint,enabled,last_seen_at,plugin_version,api_version FROM proxy_instances ORDER BY name'); return rows.map(rowToProxy); }
   async createProxy(input: { id: string; name: string; token: string }): Promise<ProxySummary | undefined> { try { await this.pool.query('INSERT INTO proxy_instances (id,name,token_hash,token_hint,enabled) VALUES (?,?,?,?,1)', [input.id, input.name, hashToken(input.token), `****${input.token.slice(-4)}`]); const [rows] = await this.pool.query<any[]>('SELECT id,name,token_hint,enabled,last_seen_at,plugin_version,api_version FROM proxy_instances WHERE id=?', [input.id]); return rows[0] ? rowToProxy(rows[0]) : undefined; } catch (error) { if ((error as { code?: string }).code === 'ER_DUP_ENTRY') return undefined; throw error; } }
   async rotateProxyToken(id: string, token: string): Promise<ProxySummary | undefined> { const [result] = await this.pool.query<any>('UPDATE proxy_instances SET token_hash=?,token_hint=? WHERE id=?', [hashToken(token), `****${token.slice(-4)}`, id]); if (!result.affectedRows) return undefined; const [rows] = await this.pool.query<any[]>('SELECT id,name,token_hint,enabled,last_seen_at,plugin_version,api_version FROM proxy_instances WHERE id=?', [id]); return rows[0] ? rowToProxy(rows[0]) : undefined; }
