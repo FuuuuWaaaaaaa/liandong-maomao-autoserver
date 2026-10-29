@@ -15,7 +15,8 @@ import java.util.Map;
 /** 从 Velocity 数据目录加载传统 config.yml；敏感令牌支持环境变量占位符。 */
 public final class PluginConfig {
     public record Values(String managerUrl, String proxyId, String token, Duration requestTimeout,
-                         long configRefreshSeconds, long heartbeatSeconds) {}
+                         long configRefreshSeconds, long heartbeatSeconds,
+                         long transferNoticeSeconds, long transferStabilitySeconds) {}
 
     private PluginConfig() {}
 
@@ -42,7 +43,10 @@ public final class PluginConfig {
         long timeoutMs = positiveLong(manager, "request-timeout-ms", 5000);
         long refreshSeconds = positiveLong(manager, "config-refresh-seconds", 30);
         long heartbeatSeconds = positiveLong(manager, "heartbeat-seconds", 15);
-        return new Values(managerUrl, proxyId, token, Duration.ofMillis(timeoutMs), refreshSeconds, heartbeatSeconds);
+        Map<String, Object> queue = asMap(root.get("queue"));
+        long noticeSeconds = positiveLong(queue, "transfer-notice-seconds", 5);
+        long stabilitySeconds = positiveLong(queue, "transfer-stability-seconds", 2);
+        return new Values(managerUrl, proxyId, token, Duration.ofMillis(timeoutMs), refreshSeconds, heartbeatSeconds, noticeSeconds, stabilitySeconds);
     }
 
     private static String resolveSecret(String value) {

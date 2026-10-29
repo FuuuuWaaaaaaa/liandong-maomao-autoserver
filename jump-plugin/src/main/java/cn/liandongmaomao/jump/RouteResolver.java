@@ -15,4 +15,5 @@ public final class RouteResolver {
         return config.get().targets().stream().filter(target -> target.aliases().stream().map(alias -> alias.toLowerCase(Locale.ROOT).replaceAll("\\.$", "")).anyMatch(canonical::equals)).findFirst();
     }
     public List<ManagerApiClient.TargetRoute> targets() { return config.get().targets(); }
+    public Optional<ManagerApiClient.TargetRoute> findById(String id) { return config.get().targets().stream().filter(target -> target.id().equals(id)).findFirst(); }
 }

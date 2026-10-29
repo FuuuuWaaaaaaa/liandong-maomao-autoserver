@@ -48,6 +48,7 @@ nav { display:grid; gap: 5px; }.nav-item { display:flex; align-items:center; gap
 .target-form-grid label { display:grid; gap:6px; color:#66798d; font-size:12px; font-weight:650; }
 .target-form-wide { grid-column:1 / -1; }
 .target-form-help { margin:0; color:#82909d; font-size:11px; line-height:1.6; }
+.server-actions { display:flex; align-items:center; gap:6px; white-space:nowrap; }.danger-button { color:#b94f59; border-color:rgba(185,79,89,.24); }.danger-button:hover { background:rgba(185,79,89,.1); }
 @media (max-width: 650px) { .target-form-grid { grid-template-columns:1fr; }.target-form-wide { grid-column:auto; }.target-create-form { padding-left:16px; padding-right:16px; } }
 .proxy-body { display:block; }
 .proxy-create-form { display:grid; gap:8px; max-width:720px; }

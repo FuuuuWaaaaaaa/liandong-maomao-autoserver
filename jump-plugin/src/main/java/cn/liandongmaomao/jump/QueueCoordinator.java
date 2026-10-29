@@ -3,19 +3,29 @@ package cn.liandongmaomao.jump;
 import com.velocitypowered.api.proxy.Player;
 
 import java.time.Duration;
-import java.util.ArrayDeque;
 import java.util.Map;
 import java.util.Queue;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentLinkedQueue;
 
 /** 每个目标独立串行，通知倒计时期间不会被新玩家打断。 */
 public final class QueueCoordinator {
     private final Map<String, Queue<UUID>> queues = new ConcurrentHashMap<>();
     private final Duration notice;
     public QueueCoordinator(Duration notice) { this.notice = notice; }
-    public void enqueue(String targetId, Player player) { queues.computeIfAbsent(targetId, ignored -> new ArrayDeque<>()).offer(player.getUniqueId()); }
+    public void enqueue(String targetId, Player player) {
+        Queue<UUID> queue = queues.computeIfAbsent(targetId, ignored -> new ConcurrentLinkedQueue<>());
+        queue.remove(player.getUniqueId());
+        queue.offer(player.getUniqueId());
+    }
+    public void enqueue(String targetId, UUID playerId) {
+        Queue<UUID> queue = queues.computeIfAbsent(targetId, ignored -> new ConcurrentLinkedQueue<>());
+        queue.remove(playerId);
+        queue.offer(playerId);
+    }
     public UUID poll(String targetId) { Queue<UUID> queue = queues.get(targetId); return queue == null ? null : queue.poll(); }
+    public void remove(String targetId, UUID playerId) { Queue<UUID> queue = queues.get(targetId); if (queue != null) queue.remove(playerId); }
     public int size(String targetId) { Queue<UUID> queue = queues.get(targetId); return queue == null ? 0 : queue.size(); }
     public Duration noticeDuration() { return notice; }
 }

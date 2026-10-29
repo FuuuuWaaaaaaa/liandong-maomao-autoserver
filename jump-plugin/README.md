@@ -17,14 +17,29 @@ manager:
 queue:
   transfer-notice-seconds: 5
   transfer-stability-seconds: 2
-  offline-ticket-ttl-seconds: 1800
 messages:
   locale: "zh_CN"
 ```
 
-`manager.token` 支持 `${环境变量名}` 占位符。推荐使用 `${JUMP_MANAGER_TOKEN}`，然后在 Velocity 进程环境中设置令牌；也可以直接填写令牌，但不应将包含真实令牌的配置文件提交到 Git。`manager.proxy-id` 必须与管理器 `PROXY_TOKENS` 左侧的代理 ID 一致。`base-url`、`proxy-id` 和时间参数均从该文件读取，修改后重启代理生效。
+`manager.token` 支持 `${环境变量名}` 占位符。推荐使用 `${JUMP_MANAGER_TOKEN}`，然后在 Velocity 进程环境中设置令牌；也可以直接填写令牌，但不应将包含真实令牌的配置文件提交到 Git。`manager.proxy-id` 必须与 WebUI 创建的代理 ID 或管理器 `PROXY_TOKENS` 中的 ID 一致。`base-url`、`proxy-id` 和时间参数均从该文件读取，修改后重启代理生效。
 
 使用 MySQL 管理器时，也可以在 WebUI 的“设置 → 代理接入”中输入代理名称并生成凭证。复制页面显示的一次性 `config.yml` 片段即可，不需要手工生成 `proxy-id` 或随机令牌；重新生成令牌后必须替换配置并重启 Velocity。
+
+插件收到目标配置后会按域名选择目标；目标未就绪时把玩家送入 `entry-profile` 指定的等待服务器，异步请求管理器唤醒目标。管理器确认 Minecraft 状态可用后，插件逐个发送 5 秒提示并连接玩家，成功连接后等待稳定窗口再处理下一位。在线票据和离线票据都会通过管理器幂等保存。
+
+活动票据保留时间由管理器的 `TICKET_TTL_SECONDS` 设置；在线排队玩家会随插件心跳续期，离线玩家重新连接时会刷新原票据。
+
+管理员可以在 Velocity 控制台执行：
+
+```text
+/jump status <目标ID>
+/jump queue <目标ID>
+/jump test <目标ID>
+/jump route <玩家连接域名>
+/jump refresh
+```
+
+这些命令需要 `jump.admin` 权限，不会显示代理令牌或面板凭证。`queue` 会同时读取在线队列和离线等待票据；`test` 会显示管理器读取到的生命周期、就绪状态和玩家数。插件心跳会携带插件版本和 API 版本；无法确认后端注册状态时发送 `unknown` 质量，管理器不会把它误判为空服。
 
 ## 构建
 

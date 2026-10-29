@@ -53,7 +53,7 @@ It does not own Pterodactyl credentials, call Pterodactyl directly, connect dire
 - The text is a snapshot, timestamped by the manager/proxy. Do not claim to update after disconnect.
 - On reconnect, look up an existing ticket by UUID and target; refresh it instead of duplicating it. If the player enters a compatible holding profile, promote it to a connected online request.
 - Online requests are dispatchable before offline tickets. An offline ticket at the head does not reserve the active transfer lock. Do not preempt an active 5-second countdown.
-- Expose ticket TTL; proposed initial default is 30 minutes, adjustable in manager settings.
+- Expose offline-ticket TTL through manager configuration; initial default is 30 minutes. Online tickets remain active while their Velocity session is connected.
 
 ### Presence heartbeat
 
@@ -81,7 +81,6 @@ queue:
   transfer-notice-seconds: 5
   transfer-stability-seconds: 2
   max-concurrent-transfers-per-target: 1
-  offline-ticket-ttl-seconds: 1800
 messages:
   locale: "zh_CN"
 diagnostics:

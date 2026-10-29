@@ -9,7 +9,7 @@ Build two isolated applications under this workspace:
 1. `jump-plugin/`: a Java plugin for a Velocity proxy. It routes players by the hostname they joined, holds them while their target is off, asks the manager to wake it, reports player presence, and serializes transfers.
 2. `server-manager/`: a Docker-deployable TypeScript API plus React WebUI, backed by the user's independent MySQL service. It manages Pterodactyl state and power actions, proxy heartbeats, durable waiting tickets, and idle shutdown.
 
-The current workspace was empty when these specifications were created. This turn adds documentation only; there is no application implementation yet.
+The specifications were created before implementation. The repository now contains the TypeScript manager, React WebUI, MySQL migration/Docker packaging, and Java Velocity plugin described below; keep this document aligned with the written contracts as behavior evolves.
 
 ## Confirmed Decisions
 
@@ -26,7 +26,7 @@ The current workspace was empty when these specifications were created. This tur
 - WebUI visual style is a core requirement: Apple-inspired liquid glass, with both light and dark themes. Keep status/error text readable over translucent surfaces.
 - Use MySQL, not SQLite, for the intended deployment. The user expects to use an existing independent SQL service. PostgreSQL is not required for this data model.
 - Default technical direction: TypeScript service, React WebUI, Docker deployment, MySQL persistence. Plugin implementation language: Java against Velocity API.
-- User asked to discuss first; implementation has not been authorized by that earlier discussion alone. The latest request authorized creating comprehensive project documentation, which is the work performed now.
+- The user has authorized implementation, functional completion, Docker/GitHub publication, and Chinese operational documentation. Keep the two applications isolated and preserve the contracts in `ARCHITECTURE.md`.
 
 ## Queue Rule To Preserve
 

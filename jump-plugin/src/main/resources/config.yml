@@ -8,6 +8,5 @@ manager:
 queue:
   transfer-notice-seconds: 5
   transfer-stability-seconds: 2
-  offline-ticket-ttl-seconds: 1800
 messages:
   locale: "zh_CN"

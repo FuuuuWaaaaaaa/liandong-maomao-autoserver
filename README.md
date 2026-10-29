@@ -76,17 +76,21 @@ SQL_TYPE=memory PROXY_TOKENS='proxy-main=dev-proxy-token' ADMIN_API_TOKEN=dev-ad
 | 显示名称 | WebUI 展示名称，例如“生存服”。 |
 | Slug | 唯一短名称；留空时使用服务器 ID。 |
 | 玩家进入的域名 | 玩家连接到 Velocity 时使用的完整域名，例如 `survival.example.com`；多个域名用逗号分隔。 |
-| Pterodactyl Server Identifier | 面板服务器的 identifier/UUID，不是显示名称。用于调用启动和停止 API。 |
-| 后端地址、端口 | Velocity 能访问的内网地址和 Minecraft 端口；后端端口不要直接暴露公网。 |
+| Pterodactyl Server Identifier | 面板服务器的 identifier/UUID，不是显示名称。新增目标时必填，用于调用启动和停止 API。 |
+| 后端地址、端口 | 管理器容器可访问的内网地址和 Minecraft 端口，新增目标时必填；后端端口不要直接暴露公网。 |
 | 软件 / 加载器、游戏版本 | 用于识别兼容性，例如 `Paper`、`Forge`、`1.21.1`。 |
 | 入口档案 | Velocity 中等待大厅的服务器名，例如 `default-lobby`。 |
+| 启动超时（秒） | 从首次唤醒请求到 Minecraft 就绪的最长等待时间，默认 `300`。 |
+| 空闲关服（秒） | 新鲜心跳确认零玩家后，连续空闲多久才发送 graceful stop，默认 `900`。 |
 
 保存后，管理器会同时写入 `target_servers` 和 `domain_routes`。代理每 30 秒拉取一次配置，随后收到域名、目标 ID、入口档案和当前生命周期。玩家访问已配置域名时，插件按以下流程工作：
 
 1. 目标是 `READY` 时，直接连接目标后端。
 2. 目标是 `OFFLINE` 时，玩家先进入入口档案，插件向管理器发送一次幂等唤醒请求；管理器再调用 Pterodactyl `start`。
 3. 面板状态变为 `running` 后，还要等待 Minecraft 就绪探测，确认后才转移排队玩家。
-4. 插件每 15 秒发送一次心跳，管理器更新目标玩家数和代理最近连接时间；心跳过期时不会误判为空服并自动关服。
+4. 插件每 15 秒发送一次心跳，管理器更新目标玩家数和代理最近连接时间；心跳过期或质量为 `unknown` 时不会误判为空服并自动关服。
+
+管理器会每 5 秒读取 Pterodactyl 的 `current_state`。当状态为 `running` 时，只有 Minecraft 状态探测成功，或代理上报了新鲜且非零的玩家数，目标才会变为 `READY`。目标保持 `READY`、心跳新鲜、玩家数为零并连续空闲达到 `idle_timeout_seconds` 后，管理器发送 graceful `stop`。网络错误、面板挂起、安装/迁移中和心跳过期都会暂停自动关服。
 
 如果“服务器”页面仍显示 0，说明当前数据库的 `target_servers` 没有记录，或者浏览器仍在使用旧镜像页面。更新镜像、重启容器并刷新浏览器后，再从表单添加目标即可。
 
@@ -173,6 +177,10 @@ sudo docker run --rm --env-file /绝对路径/manager.env \
 | `PTERODACTYL_API_TOKEN` | 使用面板时必填 | Pterodactyl Client API Token，只放在管理器环境变量或 Docker Secret。 |
 | `PTERODACTYL_TIMEOUT_MS` | 否 | 面板请求超时，默认 `5000`。 |
 | `HEARTBEAT_FRESHNESS_SECONDS` | 否 | 代理心跳新鲜窗口，默认 `45`。 |
+| `LIFECYCLE_POLL_SECONDS` | 否 | Pterodactyl 状态轮询周期，默认 `5` 秒。 |
+| `READINESS_PROBE_TIMEOUT_MS` | 否 | Minecraft 状态探测超时，默认 `2000` 毫秒。 |
+| `AUTO_STOP_ENABLED` | 否 | 是否启用安全自动关服，默认 `true`；仅在运行、就绪、心跳新鲜且连续空闲达到目标 `idle_timeout_seconds` 时执行 graceful stop。 |
+| `TICKET_TTL_SECONDS` | 否 | 活动等待票据的保留时间，默认 `1800` 秒；离线玩家重连、在线队列心跳都会刷新期限。允许范围 `60` 到 `604800` 秒。 |
 
 旧部署可以继续使用 `STORAGE_MODE` 和 `DATABASE_URL`，但新配置优先使用 `SQL_TYPE` 和 `SQL_ADDRESS`。`SQL_TYPE=mysql` 时，迁移命令必须先成功执行；应用启动不会在每个副本中重复运行迁移。
 
