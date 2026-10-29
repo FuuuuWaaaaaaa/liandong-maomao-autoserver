@@ -42,6 +42,13 @@ nav { display:grid; gap: 5px; }.nav-item { display:flex; align-items:center; gap
 [data-theme="dark"] .token-input { background:rgba(11,19,29,.42); border-color:rgba(199,223,244,.16); }
 @media (max-width: 600px) { .token-controls { align-items:stretch; flex-direction:column; }.token-controls .primary-button { width:100%; } }
 .proxy-card { grid-column: 1 / -1; }
+.target-create-card { padding-bottom: 22px; }
+.target-create-form { display:grid; gap:12px; padding:0 22px 22px; }
+.target-form-grid { display:grid; grid-template-columns:repeat(2, minmax(0,1fr)); gap:12px; }
+.target-form-grid label { display:grid; gap:6px; color:#66798d; font-size:12px; font-weight:650; }
+.target-form-wide { grid-column:1 / -1; }
+.target-form-help { margin:0; color:#82909d; font-size:11px; line-height:1.6; }
+@media (max-width: 650px) { .target-form-grid { grid-template-columns:1fr; }.target-form-wide { grid-column:auto; }.target-create-form { padding-left:16px; padding-right:16px; } }
 .proxy-body { display:block; }
 .proxy-create-form { display:grid; gap:8px; max-width:720px; }
 .proxy-create-form label { color:#66798d; font-size:12px; font-weight:650; }

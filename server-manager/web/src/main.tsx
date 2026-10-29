@@ -2,10 +2,11 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import './styles.css';
 
-type Target = { id: string; displayName: string; aliases: string[]; lifecycle: string; rawState: string; ready: boolean; playerCount: number; heartbeatAt?: string; lastError?: string; entryProfile?: string };
+type Target = { id: string; slug: string; displayName: string; aliases: string[]; lifecycle: string; rawState: string; ready: boolean; playerCount: number; heartbeatAt?: string; lastError?: string; entryProfile?: string; panelServerIdentifier?: string; backendHost?: string; backendPort?: number; software?: string; loader?: string; minecraftVersion?: string };
 type Dashboard = { counts: Record<string, number>; targets: Target[] };
 type ProxySummary = { id: string; name: string; tokenHint?: string; enabled: boolean; lastSeenAt?: string; pluginVersion?: string; apiVersion?: string };
 type ProxyCredential = { proxy: ProxySummary; token: string };
+type TargetDraft = { id: string; slug: string; displayName: string; aliases: string; panelServerIdentifier: string; backendHost: string; backendPort: string; software: string; loader: string; minecraftVersion: string; entryProfile: string };
 const labels: Record<string, string> = { READY: '就绪', STARTING: '启动中', STOPPING: '停止中', OFFLINE: '离线', FAILED: '失败', UNKNOWN: '未知', RUNNING_UNREADY: '运行中·等待游戏', IDLE_COUNTDOWN: '空闲倒计时' };
 const nav = ['总览', '服务器', '路由与档案', '活动记录', '设置'];
 const MAX_BACKGROUND_BYTES = 3 * 1024 * 1024;
@@ -30,6 +31,20 @@ function ServerTable({ targets }: { targets: Target[] }) {
   return <div className="table-wrap"><table><thead><tr><th>服务器</th><th>状态</th><th>玩家</th><th>心跳</th><th>入口档案</th><th>操作</th></tr></thead><tbody>{targets.map((target) => <tr key={target.id}><td><div className="server-name"><span className="server-dot" /><div><strong>{target.displayName}</strong><small>{target.aliases[0] ?? target.id}</small></div></div></td><td><StatusBadge state={target.lifecycle} /></td><td><strong>{target.playerCount}</strong><span className="muted"> 人</span></td><td><span className="muted">{formatAge(target.heartbeatAt)}</span></td><td><span className="profile-chip">{target.entryProfile ?? '默认大厅'}</span></td><td><button className="row-action" title="查看服务器详情" aria-label={`查看 ${target.displayName} 详情`}>→</button></td></tr>)}</tbody></table>{targets.length === 0 && <div className="empty">暂无服务器配置，请先完成管理员认证。</div>}</div>;
 }
 
+function TargetCreateForm({ error, onCreate }: { error: string; onCreate: (draft: TargetDraft) => Promise<boolean> }) {
+  const empty: TargetDraft = { id: '', slug: '', displayName: '', aliases: '', panelServerIdentifier: '', backendHost: '', backendPort: '', software: '', loader: '', minecraftVersion: '', entryProfile: 'default-lobby' };
+  const [draft, setDraft] = useState(empty);
+  const update = (key: keyof TargetDraft, value: string) => setDraft((current) => ({ ...current, [key]: value }));
+  const submit = async (event: React.FormEvent) => {
+    event.preventDefault();
+    const aliases = draft.aliases.split(/[\n,]/).map((value) => value.trim()).filter(Boolean);
+    if (!draft.id.trim() || !draft.displayName.trim() || aliases.length === 0) return;
+    const ok = await onCreate({ ...draft, slug: draft.slug.trim() || draft.id.trim(), aliases: aliases.join(',') });
+    if (ok) setDraft(empty);
+  };
+  return <article className="panel glass-surface target-create-card"><div className="panel-heading"><div><p className="eyebrow">目标配置</p><h2>添加托管服务器</h2></div></div><form className="target-create-form" onSubmit={submit}><div className="target-form-grid"><label>服务器 ID<input className="token-input" value={draft.id} onChange={(event) => update('id', event.target.value)} placeholder="server1" /></label><label>显示名称<input className="token-input" value={draft.displayName} onChange={(event) => update('displayName', event.target.value)} placeholder="生存服务器" /></label><label>Slug<input className="token-input" value={draft.slug} onChange={(event) => update('slug', event.target.value)} placeholder="留空则使用服务器 ID" /></label><label>入口档案<input className="token-input" value={draft.entryProfile} onChange={(event) => update('entryProfile', event.target.value)} placeholder="default-lobby" /></label><label className="target-form-wide">玩家进入的域名<input className="token-input" value={draft.aliases} onChange={(event) => update('aliases', event.target.value)} placeholder="survival.example.com，可用逗号分隔多个域名" /></label><label>Pterodactyl Server Identifier<input className="token-input" value={draft.panelServerIdentifier} onChange={(event) => update('panelServerIdentifier', event.target.value)} placeholder="面板服务器的 UUID 或 identifier" /></label><label>后端地址<input className="token-input" value={draft.backendHost} onChange={(event) => update('backendHost', event.target.value)} placeholder="例如 10.0.0.20" /></label><label>后端端口<input className="token-input" inputMode="numeric" value={draft.backendPort} onChange={(event) => update('backendPort', event.target.value)} placeholder="25565" /></label><label>软件 / 加载器<input className="token-input" value={draft.software} onChange={(event) => update('software', event.target.value)} placeholder="Paper / Forge" /></label><label>游戏版本<input className="token-input" value={draft.minecraftVersion} onChange={(event) => update('minecraftVersion', event.target.value)} placeholder="1.21.1" /></label></div><p className="target-form-help">域名必须是玩家实际连接到 Velocity 的 hostname；Pterodactyl identifier 可在面板服务器详情或 API 地址中查看。添加后代理会在下一次配置刷新（默认 30 秒）收到该路由。</p>{error && <p className="settings-error" role="alert">{error}</p>}<button className="primary-button" type="submit">保存服务器</button></form></article>;
+}
+
 function DashboardView({ data, error, adminToken, onSaveToken }: { data: Dashboard | null; error: string; adminToken: string; onSaveToken: (token: string) => void }) {
   const counts = data?.counts ?? {};
   const targets = data?.targets ?? [];
@@ -40,10 +55,10 @@ function DashboardView({ data, error, adminToken, onSaveToken }: { data: Dashboa
   </>;
 }
 
-function ServersView({ targets }: { targets: Target[] }) {
+function ServersView({ targets, createError, onCreate }: { targets: Target[]; createError: string; onCreate: (draft: TargetDraft) => Promise<boolean> }) {
   const ready = targets.filter((target) => target.lifecycle === 'READY').length;
   const players = targets.reduce((total, target) => total + target.playerCount, 0);
-  return <section className="view-stack"><div className="page-toolbar glass-surface"><div><p className="eyebrow">运行资源</p><h2>服务器列表</h2><p>查看所有托管目标的生命周期、玩家数和入口档案。</p></div><div className="toolbar-stats"><span><strong>{targets.length}</strong> 个目标</span><span><strong>{ready}</strong> 个就绪</span><span><strong>{players}</strong> 名玩家</span></div></div><article className="panel glass-surface full-panel"><div className="panel-heading"><div><p className="eyebrow">目标清单</p><h2>全部服务器</h2></div><button className="quiet-button" onClick={() => location.reload()}>刷新 <span>↻</span></button></div><ServerTable targets={targets} /></article></section>;
+  return <section className="view-stack"><div className="page-toolbar glass-surface"><div><p className="eyebrow">运行资源</p><h2>服务器列表</h2><p>查看所有托管目标的生命周期、玩家数和入口档案。</p></div><div className="toolbar-stats"><span><strong>{targets.length}</strong> 个目标</span><span><strong>{ready}</strong> 个就绪</span><span><strong>{players}</strong> 名玩家</span></div></div><TargetCreateForm error={createError} onCreate={onCreate} /><article className="panel glass-surface full-panel"><div className="panel-heading"><div><p className="eyebrow">目标清单</p><h2>全部服务器</h2></div><button className="quiet-button" onClick={() => location.reload()}>刷新 <span>↻</span></button></div><ServerTable targets={targets} /></article></section>;
 }
 
 function RoutesProfilesView({ targets }: { targets: Target[] }) {
@@ -77,6 +92,7 @@ function App() {
   const [proxies, setProxies] = useState<ProxySummary[]>([]);
   const [proxyCredential, setProxyCredential] = useState<ProxyCredential | null>(null);
   const [proxyError, setProxyError] = useState('');
+  const [targetCreateError, setTargetCreateError] = useState('');
   const [background, setBackground] = useState(localStorage.getItem('custom-background') ?? '');
   const [backgroundError, setBackgroundError] = useState('');
   const backgroundInputRef = useRef<HTMLInputElement>(null);
@@ -106,10 +122,21 @@ function App() {
   };
   const createProxy = (name: string) => { setProxyError(''); adminRequest<ProxyCredential>(adminToken, '/api/v1/admin/proxies', { method: 'POST', body: JSON.stringify({ name }) }).then((result) => { setProxyCredential(result); loadProxies(adminToken); }).catch((reason) => setProxyError(reason instanceof Error ? reason.message : '代理创建失败')); };
   const rotateProxy = (id: string) => { setProxyError(''); adminRequest<ProxyCredential>(adminToken, `/api/v1/admin/proxies/${encodeURIComponent(id)}/rotate`, { method: 'POST' }).then((result) => { setProxyCredential(result); loadProxies(adminToken); }).catch((reason) => setProxyError(reason instanceof Error ? reason.message : '代理令牌重新生成失败')); };
+  const createTarget = async (draft: TargetDraft) => {
+    setTargetCreateError('');
+    try {
+      await adminRequest<{ target: Target }>(adminToken, '/api/v1/admin/targets', { method: 'POST', body: JSON.stringify({ id: draft.id.trim(), slug: draft.slug.trim(), displayName: draft.displayName.trim(), aliases: draft.aliases.split(',').map((value) => value.trim()).filter(Boolean), panelServerIdentifier: draft.panelServerIdentifier.trim() || undefined, backendHost: draft.backendHost.trim() || undefined, backendPort: draft.backendPort.trim() ? Number(draft.backendPort) : undefined, software: draft.software.trim() || undefined, loader: draft.loader.trim() || undefined, minecraftVersion: draft.minecraftVersion.trim() || undefined, entryProfile: draft.entryProfile.trim() || undefined }) });
+      loadDashboard(adminToken);
+      return true;
+    } catch (reason) {
+      setTargetCreateError(reason instanceof Error ? reason.message : '服务器创建失败');
+      return false;
+    }
+  };
   const clearAdminToken = () => { localStorage.removeItem('admin-token'); setAdminToken(''); setData(null); setProxies([]); setProxyCredential(null); setError('已清除浏览器中的管理员令牌'); };
   const handleBackgroundUpload = (event: React.ChangeEvent<HTMLInputElement>) => { const file = event.target.files?.[0]; event.target.value = ''; setBackgroundError(''); if (!file) return; if (!file.type.startsWith('image/')) { setBackgroundError('请选择图片文件。'); return; } if (file.size > MAX_BACKGROUND_BYTES) { setBackgroundError('图片不能超过 3 MB，请先压缩后再上传。'); return; } const reader = new FileReader(); reader.onload = () => setBackground(String(reader.result)); reader.onerror = () => setBackgroundError('图片读取失败，请换一张图片重试。'); reader.readAsDataURL(file); };
   const targets = data?.targets ?? [];
-  const view = active === '设置' ? <SettingsPanel background={background} backgroundError={backgroundError} inputRef={backgroundInputRef} onUpload={handleBackgroundUpload} onClear={() => { setBackground(''); setBackgroundError(''); }} adminToken={adminToken} onSaveToken={saveAdminToken} onClearToken={clearAdminToken} proxies={proxies} proxyCredential={proxyCredential} proxyError={proxyError} onCreateProxy={createProxy} onRotateProxy={rotateProxy} /> : active === '服务器' ? <ServersView targets={targets} /> : active === '路由与档案' ? <RoutesProfilesView targets={targets} /> : active === '活动记录' ? <ActivityView targets={targets} /> : <DashboardView data={data} error={error} adminToken={adminToken} onSaveToken={saveAdminToken} />;
+  const view = active === '设置' ? <SettingsPanel background={background} backgroundError={backgroundError} inputRef={backgroundInputRef} onUpload={handleBackgroundUpload} onClear={() => { setBackground(''); setBackgroundError(''); }} adminToken={adminToken} onSaveToken={saveAdminToken} onClearToken={clearAdminToken} proxies={proxies} proxyCredential={proxyCredential} proxyError={proxyError} onCreateProxy={createProxy} onRotateProxy={rotateProxy} /> : active === '服务器' ? <ServersView targets={targets} createError={targetCreateError} onCreate={createTarget} /> : active === '路由与档案' ? <RoutesProfilesView targets={targets} /> : active === '活动记录' ? <ActivityView targets={targets} /> : <DashboardView data={data} error={error} adminToken={adminToken} onSaveToken={saveAdminToken} />;
   return <div className={background ? 'app-shell has-custom-background' : 'app-shell'}>{background && <div className="custom-background" style={{ backgroundImage: `url(${background})` }} aria-hidden="true" />}<aside className="sidebar glass-surface"><div className="brand"><span className="brand-mark">猫</span><div><strong>联动猫猫</strong><small>按需开服控制台</small></div></div><nav>{nav.map((item, index) => <button key={item} className={active === item ? 'nav-item active' : 'nav-item'} onClick={() => setActive(item)}><span className="nav-icon">{['⌂', '▦', '⌁', '◷', '⚙'][index]}</span>{item}</button>)}</nav><div className="sidebar-footer"><span className="pulse" />控制面在线</div></aside><main className="main-content"><header className="topbar"><div><p className="eyebrow">运营控制台 / {active}</p><h1>{active}</h1></div><div className="top-actions"><button className="icon-button" title="自定义网页背景" aria-label="自定义网页背景" onClick={() => setActive('设置')}>▧</button><button className="icon-button" title="切换主题" aria-label="切换主题" onClick={() => setDark((value) => !value)}>{dark ? '☼' : '☾'}</button><div className="avatar">管</div></div></header>{view}</main></div>;
 }
 

@@ -37,6 +37,7 @@ function requireAdmin(request: FastifyRequest, reply: FastifyReply): boolean {
   }
   return true;
 }
+function normalizeHostname(value: string): string { return value.trim().toLowerCase().replace(/\.$/, ''); }
 
 app.get('/health/live', async () => ({ status: 'ok', service: 'liandong-maomao-server-manager' }));
 app.get('/health/ready', async (_request, reply) => { try { await store.listTargets(); return { status: 'ready', sqlType: config.sqlType }; } catch { return reply.code(503).send({ status: 'not_ready' }); } });
@@ -56,6 +57,35 @@ app.post('/api/v1/proxy/targets/:targetId/tickets/:ticketId/events', async (requ
 app.get('/api/v1/proxy/targets/:targetId/queue', async (request, reply) => { const proxyId = await requireProxy(request, reply); if (!proxyId) return; const targetId = (request.params as { targetId: string }).targetId; if (!await store.getTarget(targetId)) return reply.code(404).send({ code: 'TARGET_NOT_FOUND', message: '目标服务器不存在' }); const playerUuid = (request.query as { playerUuid?: string }).playerUuid; return summarizeTickets(await store.listTickets(targetId), playerUuid); });
 
 app.get('/api/v1/admin/dashboard', async (request, reply) => { if (!requireAdmin(request, reply)) return; const targets = await store.listTargets(); const counts = Object.fromEntries(['READY', 'STARTING', 'STOPPING', 'OFFLINE', 'FAILED', 'UNKNOWN'].map((state) => [state, targets.filter((target) => target.lifecycle === state).length])); return { counts, targets: targets.map((target) => ({ ...target, queue: summarizeTickets([]) })) }; });
+
+const targetCreateSchema = z.object({
+  id: z.string().trim().regex(/^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/, 'ID 只能包含字母、数字、下划线和短横线'),
+  slug: z.string().trim().min(1).max(128),
+  displayName: z.string().trim().min(1).max(128),
+  aliases: z.array(z.string().trim().min(1).max(255)).min(1).max(16),
+  panelServerIdentifier: z.string().trim().max(128).optional(),
+  backendHost: z.string().trim().max(255).optional(),
+  backendPort: z.coerce.number().int().min(1).max(65535).optional(),
+  software: z.string().trim().max(64).optional(),
+  loader: z.string().trim().max(64).optional(),
+  minecraftVersion: z.string().trim().max(32).optional(),
+  entryProfile: z.string().trim().max(128).optional(),
+});
+app.post('/api/v1/admin/targets', async (request, reply) => {
+  if (!requireAdmin(request, reply)) return;
+  const parsed = targetCreateSchema.safeParse(request.body);
+  if (!parsed.success) return reply.code(400).send({ code: 'INVALID_BODY', message: '服务器信息格式无效', details: parsed.error.flatten() });
+  const aliases = [...new Set(parsed.data.aliases.map(normalizeHostname).filter(Boolean))];
+  if (aliases.length !== parsed.data.aliases.length) return reply.code(400).send({ code: 'INVALID_ALIASES', message: '域名不能为空且不能重复' });
+  try {
+    const target = await store.createTarget({ ...parsed.data, aliases, panelServerIdentifier: parsed.data.panelServerIdentifier || undefined, backendHost: parsed.data.backendHost || undefined, software: parsed.data.software || undefined, loader: parsed.data.loader || undefined, minecraftVersion: parsed.data.minecraftVersion || undefined, entryProfile: parsed.data.entryProfile || undefined });
+    if (!target) return reply.code(409).send({ code: 'TARGET_EXISTS', message: '服务器 ID、slug 或域名已存在' });
+    return reply.code(201).send({ target });
+  } catch (error) {
+    if ((error as { code?: string }).code === 'ER_DUP_ENTRY') return reply.code(409).send({ code: 'TARGET_EXISTS', message: '服务器 ID、slug 或域名已存在' });
+    throw error;
+  }
+});
 
 const proxyCreateSchema = z.object({ name: z.string().trim().min(1).max(128) });
 const MAX_PROXY_ID_SUFFIX_LENGTH = 48;

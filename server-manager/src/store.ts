@@ -28,6 +28,20 @@ export interface Target {
   entryProfile?: string;
 }
 
+export interface TargetInput {
+  id: string;
+  slug: string;
+  displayName: string;
+  aliases: string[];
+  panelServerIdentifier?: string;
+  backendHost?: string;
+  backendPort?: number;
+  software?: string;
+  loader?: string;
+  minecraftVersion?: string;
+  entryProfile?: string;
+}
+
 export interface WakeResult {
   target: Target;
   operationId?: string;
@@ -48,6 +62,7 @@ export interface ProxySummary {
 export interface Store {
   close(): Promise<void>;
   listTargets(): Promise<Target[]>;
+  createTarget(input: TargetInput): Promise<Target | undefined>;
   getTarget(id: string): Promise<Target | undefined>;
   findTargetByHostname(hostname: string): Promise<Target | undefined>;
   wakeTarget(id: string, idempotencyKey: string): Promise<WakeResult>;
@@ -101,6 +116,12 @@ export class MemoryStore implements Store {
   async createProxy(input: { id: string; name: string; token: string }): Promise<ProxySummary | undefined> { if (this.proxies.has(input.id)) return undefined; this.proxyTokens.set(input.id, input.token); const proxy = { id: input.id, name: input.name, tokenHint: `****${input.token.slice(-4)}`, enabled: true }; this.proxies.set(input.id, proxy); return proxy; }
   async rotateProxyToken(id: string, token: string): Promise<ProxySummary | undefined> { const proxy = this.proxies.get(id); if (!proxy) return undefined; this.proxyTokens.set(id, token); const updated = { ...proxy, tokenHint: `****${token.slice(-4)}` }; this.proxies.set(id, updated); return updated; }
   async listTargets(): Promise<Target[]> { return [...this.targets.values()]; }
+  async createTarget(input: TargetInput): Promise<Target | undefined> {
+    if (this.targets.has(input.id) || [...this.targets.values()].some((target) => target.slug === input.slug)) return undefined;
+    const target: Target = { ...input, rawState: 'offline', lifecycle: 'OFFLINE', ready: false, enabled: true, playerCount: 0, startupTimeoutSeconds: 300, idleTimeoutSeconds: 900 };
+    this.targets.set(target.id, target);
+    return target;
+  }
   async getTarget(id: string): Promise<Target | undefined> { return this.targets.get(id); }
   async findTargetByHostname(hostname: string): Promise<Target | undefined> {
     const normalized = normalizeHostname(hostname);
@@ -156,6 +177,22 @@ export class MysqlStore implements Store {
   async createProxy(input: { id: string; name: string; token: string }): Promise<ProxySummary | undefined> { try { await this.pool.query('INSERT INTO proxy_instances (id,name,token_hash,token_hint,enabled) VALUES (?,?,?,?,1)', [input.id, input.name, hashToken(input.token), `****${input.token.slice(-4)}`]); const [rows] = await this.pool.query<any[]>('SELECT id,name,token_hint,enabled,last_seen_at,plugin_version,api_version FROM proxy_instances WHERE id=?', [input.id]); return rows[0] ? rowToProxy(rows[0]) : undefined; } catch (error) { if ((error as { code?: string }).code === 'ER_DUP_ENTRY') return undefined; throw error; } }
   async rotateProxyToken(id: string, token: string): Promise<ProxySummary | undefined> { const [result] = await this.pool.query<any>('UPDATE proxy_instances SET token_hash=?,token_hint=? WHERE id=?', [hashToken(token), `****${token.slice(-4)}`, id]); if (!result.affectedRows) return undefined; const [rows] = await this.pool.query<any[]>('SELECT id,name,token_hint,enabled,last_seen_at,plugin_version,api_version FROM proxy_instances WHERE id=?', [id]); return rows[0] ? rowToProxy(rows[0]) : undefined; }
   async listTargets(): Promise<Target[]> { const [rows] = await this.pool.query<any[]>('SELECT * FROM target_servers WHERE enabled = 1 ORDER BY display_name'); return rows.map(rowToTarget); }
+  async createTarget(input: TargetInput): Promise<Target | undefined> {
+    const connection = await this.pool.getConnection();
+    try {
+      await connection.beginTransaction();
+      await connection.query('INSERT INTO target_servers (id,slug,display_name,aliases,panel_server_identifier,backend_host,backend_port,software,loader,minecraft_version,entry_profile) VALUES (?,?,?,?,?,?,?,?,?,?,?)', [input.id, input.slug, input.displayName, JSON.stringify(input.aliases), input.panelServerIdentifier ?? null, input.backendHost ?? null, input.backendPort ?? null, input.software ?? null, input.loader ?? null, input.minecraftVersion ?? null, input.entryProfile ?? null]);
+      for (const alias of input.aliases) await connection.query('INSERT INTO domain_routes (id,normalized_hostname,target_id,route_enabled) VALUES (UUID(),?,?,1)', [normalizeHostname(alias), input.id]);
+      await connection.commit();
+      return this.getTarget(input.id);
+    } catch (error) {
+      await connection.rollback();
+      if ((error as { code?: string }).code === 'ER_DUP_ENTRY') return undefined;
+      throw error;
+    } finally {
+      connection.release();
+    }
+  }
   async getTarget(id: string): Promise<Target | undefined> { const [rows] = await this.pool.query<any[]>('SELECT * FROM target_servers WHERE id = ?', [id]); return rows[0] ? rowToTarget(rows[0]) : undefined; }
   async findTargetByHostname(hostname: string): Promise<Target | undefined> { const [rows] = await this.pool.query<any[]>('SELECT t.* FROM target_servers t JOIN domain_routes d ON d.target_id=t.id WHERE d.normalized_hostname=? AND d.route_enabled=1 LIMIT 1', [normalizeHostname(hostname)]); return rows[0] ? rowToTarget(rows[0]) : undefined; }
   async wakeTarget(id: string, idempotencyKey: string): Promise<WakeResult> {

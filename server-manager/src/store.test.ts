@@ -24,4 +24,11 @@ describe('代理凭证管理', () => {
     await store.touchProxy('proxy-test', observedAt);
     expect((await store.listProxies())[0]?.lastSeenAt).toBe(observedAt);
   });
+
+  it('可以创建目标服务器并按域名查找', async () => {
+    const store = new MemoryStore(new Map());
+    const created = await store.createTarget({ id: 'server-test', slug: 'server-test', displayName: '测试服务器', aliases: ['play.example.com'], entryProfile: 'default-lobby' });
+    expect(created?.lifecycle).toBe('OFFLINE');
+    expect((await store.findTargetByHostname('PLAY.EXAMPLE.COM.'))?.id).toBe('server-test');
+  });
 });

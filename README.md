@@ -66,6 +66,30 @@ SQL_TYPE=memory PROXY_TOKENS='proxy-main=dev-proxy-token' ADMIN_API_TOKEN=dev-ad
 
 完整令牌只在创建或重新生成后返回一次，代理列表不会显示完整令牌。`PROXY_TOKENS` 仍可作为环境变量启动时的兼容/引导凭证；WebUI 创建的代理凭证会以哈希形式保存到 MySQL 的 `proxy_instances` 表中。
 
+### 在 WebUI 添加目标服务器
+
+“服务器”页面里的数量统计指 Pterodactyl 后端目标服务器，不是 Velocity 代理数量。完成数据库迁移并登录管理员令牌后，进入 **服务器** 页面，填写“添加托管服务器”表单：
+
+| 字段 | 填写内容 |
+|---|---|
+| 服务器 ID | 管理器内部唯一 ID，例如 `server1`；也要与 Velocity 后端注册名一致。 |
+| 显示名称 | WebUI 展示名称，例如“生存服”。 |
+| Slug | 唯一短名称；留空时使用服务器 ID。 |
+| 玩家进入的域名 | 玩家连接到 Velocity 时使用的完整域名，例如 `survival.example.com`；多个域名用逗号分隔。 |
+| Pterodactyl Server Identifier | 面板服务器的 identifier/UUID，不是显示名称。用于调用启动和停止 API。 |
+| 后端地址、端口 | Velocity 能访问的内网地址和 Minecraft 端口；后端端口不要直接暴露公网。 |
+| 软件 / 加载器、游戏版本 | 用于识别兼容性，例如 `Paper`、`Forge`、`1.21.1`。 |
+| 入口档案 | Velocity 中等待大厅的服务器名，例如 `default-lobby`。 |
+
+保存后，管理器会同时写入 `target_servers` 和 `domain_routes`。代理每 30 秒拉取一次配置，随后收到域名、目标 ID、入口档案和当前生命周期。玩家访问已配置域名时，插件按以下流程工作：
+
+1. 目标是 `READY` 时，直接连接目标后端。
+2. 目标是 `OFFLINE` 时，玩家先进入入口档案，插件向管理器发送一次幂等唤醒请求；管理器再调用 Pterodactyl `start`。
+3. 面板状态变为 `running` 后，还要等待 Minecraft 就绪探测，确认后才转移排队玩家。
+4. 插件每 15 秒发送一次心跳，管理器更新目标玩家数和代理最近连接时间；心跳过期时不会误判为空服并自动关服。
+
+如果“服务器”页面仍显示 0，说明当前数据库的 `target_servers` 没有记录，或者浏览器仍在使用旧镜像页面。更新镜像、重启容器并刷新浏览器后，再从表单添加目标即可。
+
 ## GitHub Docker 镜像
 
 每次推送 `main` 或发布 `v*` 标签时，GitHub Actions 会自动构建并发布管理器镜像到 GitHub Container Registry：
