@@ -73,7 +73,7 @@ public final class ManagerApiClient {
     }
 
     public CompletableFuture<JsonObject> wake(String targetId, String idempotencyKey) {
-        HttpRequest request = request("/api/v1/proxy/targets/" + encode(targetId) + "/wake").header("Idempotency-Key", idempotencyKey).POST(HttpRequest.BodyPublishers.noBody()).build();
+        HttpRequest request = request("/api/v1/proxy/targets/" + encode(targetId) + "/wake").header("Idempotency-Key", idempotencyKey).POST(HttpRequest.BodyPublishers.ofString("{}")).build();
         return client.sendAsync(request, HttpResponse.BodyHandlers.ofString()).thenApply(response -> {
             if (response.statusCode() / 100 != 2) throw new IllegalStateException("唤醒失败: " + response.statusCode());
             JsonObject body = JsonParser.parseString(response.body()).getAsJsonObject();
